@@ -33,6 +33,16 @@ function capturedAuthorization(on: Parameters<typeof mock.env>[0]) {
   return () => authorization
 }
 
+/** Collects every line the router writes with `$.ui.log`. */
+function capturedLog(on: Parameters<typeof mock.env>[0]) {
+  const lines: string[] = []
+  on('ui.log', async (_$, e, _next) => {
+    lines.push(e.text)
+    return { value: undefined }
+  })
+  return lines
+}
+
 test(
   'TYPESAFE_API_KEY is used when options.typesafeApiKey is unset',
   { options: { provider: 'typesafe' } },
@@ -133,6 +143,7 @@ test(
     const clock = mock.clock(on)
     on('model.classify', async (_$, _e, _next) => new Promise(() => {}))
     on('prompt.submit', async (_$, e, _next) => e)
+    const lines = capturedLog(on)
     let sent: string | number | undefined
     on('turn.step', async function* (_$, e, _next) {
       sent = e.effort
@@ -147,6 +158,40 @@ test(
     }
     await stream.result
     expect(sent).toBe('medium')
+    expect(lines.some((line) => line.includes('passed 800ms; leaving the turn alone'))).toBe(true)
+  },
+)
+
+// The effort is raced on its own: a tier that came back in time is still
+// routed when only the effort question is out at timeoutMs.
+test(
+  'a built-in effort past timeoutMs still routes the tier',
+  { options: { provider: 'builtin', timeoutMs: 800 } },
+  async ($, on) => {
+    mock.env(on, {})
+    const clock = mock.clock(on)
+    on('model.classify', async (_$, e, _next) =>
+      e.labels.includes('deep') ? { value: 'deep' } : new Promise(() => {}),
+    )
+    on('prompt.submit', async (_$, e, _next) => e)
+    const lines = capturedLog(on)
+    let sent: { model: string; effort?: string | number } | undefined
+    on('turn.step', async function* (_$, e, _next) {
+      sent = { model: e.model, effort: e.effort }
+      return { turnId: e.turnId, index: e.index, answer: '', toolUses: [] } as never
+    })
+    const submitted = $.prompt.submit(prompt)
+    await clock.advance(800)
+    await submitted
+    const stream = $.turn.step({ turnId: 'turn-1', index: 0, model: 'haiku', effort: 'medium', messageCount: 1 })
+    for await (const _chunk of stream) {
+      // drained only so the result settles
+    }
+    await stream.result
+    expect(sent?.model).not.toBe('haiku')
+    expect(sent?.effort).toBe('medium')
+    expect(lines.some((line) => line.includes('leaving the turn alone'))).toBe(false)
+    expect(lines.some((line) => line.includes('effort classification passed 800ms'))).toBe(true)
   },
 )
 
@@ -176,6 +221,7 @@ test(
     mock.env(on, {})
     const clock = mock.clock(on)
     on('model.classify', async (_$, _e, _next) => new Promise(() => {}))
+    const lines = capturedLog(on)
     let spawnedWith: string | undefined
     on('agent.spawn', async (_$, e, _next) => {
       spawnedWith = e.model ?? e.parentModel
@@ -185,5 +231,6 @@ test(
     await clock.advance(800)
     await spawned
     expect(spawnedWith).toBe('claude-opus-5')
+    expect(lines.some((line) => line.includes('passed 800ms; leaving the subagent alone'))).toBe(true)
   },
 )

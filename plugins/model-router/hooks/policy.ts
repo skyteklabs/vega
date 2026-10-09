@@ -231,20 +231,20 @@ export const BUILTIN_EFFORT_LABELS = [
 ] as const
 
 /**
- * The highest score the built-in classifier may ask for. It reports no
- * confidence, so its upgrades skip the threshold; past `high` an unmeasured
- * hunch would cost more than it is worth.
+ * The highest reasoning level an effort reported without a confidence may
+ * raise a turn to. Such an upgrade skips the threshold, and past `high` an
+ * unmeasured hunch would cost more than it is worth.
  */
-const BUILTIN_MAX_EFFORT = EFFORT_ORDER.indexOf('high')
+const UNMEASURED_MAX_EFFORT = EFFORT_ORDER.indexOf('high')
 
 /**
  * A label picked by the built-in classifier as the rubric score (0..3) a
- * backend would have sent, capped at `high`, or null when the label is not
- * one of BUILTIN_EFFORT_LABELS.
+ * backend would have sent, or null when the label is not one of
+ * BUILTIN_EFFORT_LABELS. Uncapped: this is the answer, before any policy.
  */
 export function rubricScore(label: string | undefined): number | null {
   const index = BUILTIN_EFFORT_LABELS.indexOf(label as (typeof BUILTIN_EFFORT_LABELS)[number])
-  return index === -1 ? null : Math.min(index, BUILTIN_MAX_EFFORT)
+  return index === -1 ? null : index
 }
 
 /** The rubric score (0..3) as a reasoning level. */
@@ -401,6 +401,11 @@ export function route(
     // and rated mechanically simple would be pulled down to `high` with no
     // confidence check at all — the opposite of what the rule is for.
     if (forced && currentRank !== null) wantedRank = Math.max(wantedRank, currentRank)
+    // An effort with no confidence behind it may only rise, and not past
+    // `high`; a wanted `xhigh` over a current `high` is then no change at all.
+    if (!forced && decision.effortConfidence === null) {
+      wantedRank = Math.min(wantedRank, UNMEASURED_MAX_EFFORT)
+    }
 
     // A numeric effort is the caller's own scale, not this ladder; leave it.
     const comparable = typeof current.effort !== 'number'

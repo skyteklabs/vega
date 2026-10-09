@@ -403,22 +403,33 @@ test('a slash command alone is not a task; with text after it, it is', () => {
     expect(bareCommand(text)).toBe(false)
 })
 
-test('a built-in effort label reads as its score, capped at high', () => {
+test('a built-in effort label reads as its raw score', () => {
   expect(rubricScore('needs almost no reasoning')).toBe(0)
   expect(rubricScore('needs a lot of reasoning')).toBe(2)
-  expect(rubricScore('needs as much reasoning as possible')).toBe(2)
+  expect(rubricScore('needs as much reasoning as possible')).toBe(3)
   expect(rubricScore('a lot')).toBeNull()
   expect(rubricScore(undefined)).toBeNull()
 })
 
-test('a built-in effort with no confidence may raise effort but never lower it', () => {
-  const builtin = (effort: number): Decision => ({
-    tier: 'deep',
-    confidence: null,
-    risky: null,
-    effort,
-    effortConfidence: null,
-  })
-  expect(route(builtin(2), { model: 'opus', effort: 'medium' }, config).effort).toBe('high')
-  expect(route(builtin(0), { model: 'opus', effort: 'medium' }, config).effort).toBeNull()
+const unmeasured = (effort: number, risky: number | null = null): Decision => ({
+  tier: 'deep',
+  confidence: null,
+  risky,
+  effort,
+  effortConfidence: null,
+})
+
+test('an effort with no confidence may raise effort but never lower it', () => {
+  expect(route(unmeasured(2), { model: 'opus', effort: 'medium' }, config).effort).toBe('high')
+  expect(route(unmeasured(0), { model: 'opus', effort: 'medium' }, config).effort).toBeNull()
+})
+
+test('an effort with no confidence raises a turn no higher than high', () => {
+  expect(route(unmeasured(3), { model: 'opus', effort: 'medium' }, config).effort).toBe('high')
+  expect(route(unmeasured(3), { model: 'opus', effort: 'high' }, config).effort).toBeNull()
+  expect(route(unmeasured(3), { model: 'opus', effort: 'xhigh' }, config).effort).toBeNull()
+})
+
+test('the high cap does not apply to an effort forced by risk', () => {
+  expect(route(unmeasured(3, 0.9), { model: 'opus', effort: 'medium' }, config).effort).toBe('xhigh')
 })

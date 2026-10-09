@@ -64,6 +64,17 @@ import {
 } from './policy.ts'
 import type { Decision, Effort, PolicyConfig, Provider, Tier } from './policy.ts'
 
+/**
+ * What a built-in classification resolves to when it is still out at its
+ * deadline: a sentinel, since `$.model.classify` itself may resolve undefined.
+ */
+const TIMED_OUT = Symbol('timed out')
+
+/** `work`, or TIMED_OUT if `deadline` comes first. */
+function within<T>(work: Promise<T>, deadline: Promise<void>): Promise<T | typeof TIMED_OUT> {
+  return Promise.race([work, deadline.then(() => TIMED_OUT)])
+}
+
 export const register: Register = (on, options) => {
   const text = (key: string, fallback: string) =>
     typeof options[key] === 'string' && options[key] ? (options[key] as string) : fallback
@@ -205,22 +216,25 @@ export const register: Register = (on, options) => {
           $.ui.log(`[model-router] built-in classifier failed: ${String(error)}`)
           return undefined
         })
-      // The same latency budget as a backend: past it, the turn is left alone.
-      const answers = await Promise.race([
-        Promise.all([
-          classify(TIER_ORDER),
-          routeMainEffort ? classify(BUILTIN_EFFORT_LABELS) : undefined,
-        ]),
-        $.clock.sleep(timeoutMs),
+      // The same latency budget as a backend, one deadline for both calls but
+      // each raced on its own: an effort answer still out at the deadline
+      // costs only the effort, never a tier that already came back.
+      const deadline = $.clock.sleep(timeoutMs)
+      const [label, effortLabel] = await Promise.all([
+        within(classify(TIER_ORDER), deadline),
+        routeMainEffort ? within(classify(BUILTIN_EFFORT_LABELS), deadline) : undefined,
       ])
-      if (!answers) $.ui.log(`[model-router] classification passed ${timeoutMs}ms; leaving the turn alone`)
-      const [label, effortLabel] = answers ?? []
-      if (label) {
+      if (label === TIMED_OUT) {
+        $.ui.log(`[model-router] classification passed ${timeoutMs}ms; leaving the turn alone`)
+      } else if (label) {
+        if (effortLabel === TIMED_OUT) {
+          $.ui.log(`[model-router] effort classification passed ${timeoutMs}ms; routing the tier alone`)
+        }
         decision = {
           tier: label as Tier,
           confidence: null,
           risky: null,
-          effort: rubricScore(effortLabel),
+          effort: effortLabel === TIMED_OUT ? null : rubricScore(effortLabel),
           effortConfidence: null,
         }
       }
@@ -332,13 +346,8 @@ export const register: Register = (on, options) => {
     } else {
       try {
         // The same latency budget as a backend: past it, the subagent is left alone.
-        // A sentinel, since `classify` itself may resolve undefined.
-        const timedOut = Symbol('timed out')
-        const label = await Promise.race([
-          $.model.classify(e.prompt, TIER_ORDER),
-          $.clock.sleep(timeoutMs).then(() => timedOut),
-        ])
-        if (label === timedOut) {
+        const label = await within($.model.classify(e.prompt, TIER_ORDER), $.clock.sleep(timeoutMs))
+        if (label === TIMED_OUT) {
           $.ui.log(`[model-router] classification passed ${timeoutMs}ms; leaving the subagent alone`)
         } else if (label) {
           decision = {
