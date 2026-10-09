@@ -98,7 +98,7 @@ test(
 )
 
 // With no key, the built-in classifier is asked the effort rubric beside the
-// tier, so the main loop's effort has a score to route on.
+// tier, so the main loop's effort has a score to route on, capped at high.
 test(
   'the built-in classifier reports an effort score',
   { options: { provider: 'builtin' } },
@@ -108,7 +108,7 @@ test(
     const asked: (readonly string[])[] = []
     on('model.classify', async (_$, e, _next) => {
       asked.push(e.labels)
-      return { value: e.labels.includes('deep') ? 'deep' : 'a lot' }
+      return { value: e.labels.includes('deep') ? 'deep' : 'needs as much reasoning as possible' }
     })
     const lines: string[] = []
     on('ui.log', async (_$, e, _next) => {

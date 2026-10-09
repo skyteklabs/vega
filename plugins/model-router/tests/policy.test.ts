@@ -403,10 +403,11 @@ test('a slash command alone is not a task; with text after it, it is', () => {
     expect(bareCommand(text)).toBe(false)
 })
 
-test('a rubric label from the built-in classifier reads as its score', () => {
-  expect(rubricScore('almost none')).toBe(0)
-  expect(rubricScore('as much as possible')).toBe(3)
-  expect(rubricScore('medium')).toBeNull()
+test('a built-in effort label reads as its score, capped at high', () => {
+  expect(rubricScore('needs almost no reasoning')).toBe(0)
+  expect(rubricScore('needs a lot of reasoning')).toBe(2)
+  expect(rubricScore('needs as much reasoning as possible')).toBe(2)
+  expect(rubricScore('a lot')).toBeNull()
   expect(rubricScore(undefined)).toBeNull()
 })
 

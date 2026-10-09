@@ -59,7 +59,7 @@ const TIER_CRITERIA: Record<Tier, string> = {
   deep: 'Hard or high-stakes: architecture and design, debugging a failure whose cause is unknown, security, data migrations, concurrency, anything touching production or money.',
 }
 
-export const EFFORT_RUBRIC = ['almost none', 'some', 'a lot', 'as much as possible'] as const
+const EFFORT_RUBRIC = ['almost none', 'some', 'a lot', 'as much as possible'] as const
 
 export const DEFAULT_BASE_URL: Record<Provider, string> = {
   typesafe: 'https://api.typesafe.ai',
@@ -219,12 +219,32 @@ function confidenceOf(answer: Record<string, unknown>): number | null {
 }
 
 /**
- * A rubric label picked by the built-in classifier as the score (0..3) a
- * backend would have sent, or null when the label is not one of the rubric's.
+ * The effort rubric as the built-in classifier is asked it. `$.model.classify`
+ * takes labels and nothing else, so each one carries the question itself; a
+ * bare "a lot" could as well be read as the size of the change.
+ */
+export const BUILTIN_EFFORT_LABELS = [
+  'needs almost no reasoning',
+  'needs some reasoning',
+  'needs a lot of reasoning',
+  'needs as much reasoning as possible',
+] as const
+
+/**
+ * The highest score the built-in classifier may ask for. It reports no
+ * confidence, so its upgrades skip the threshold; past `high` an unmeasured
+ * hunch would cost more than it is worth.
+ */
+const BUILTIN_MAX_EFFORT = EFFORT_ORDER.indexOf('high')
+
+/**
+ * A label picked by the built-in classifier as the rubric score (0..3) a
+ * backend would have sent, capped at `high`, or null when the label is not
+ * one of BUILTIN_EFFORT_LABELS.
  */
 export function rubricScore(label: string | undefined): number | null {
-  const index = EFFORT_RUBRIC.indexOf(label as (typeof EFFORT_RUBRIC)[number])
-  return index === -1 ? null : index
+  const index = BUILTIN_EFFORT_LABELS.indexOf(label as (typeof BUILTIN_EFFORT_LABELS)[number])
+  return index === -1 ? null : Math.min(index, BUILTIN_MAX_EFFORT)
 }
 
 /** The rubric score (0..3) as a reasoning level. */

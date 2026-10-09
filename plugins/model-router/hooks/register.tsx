@@ -58,7 +58,7 @@ import {
   requestModelId,
   route,
   rubricScore,
-  EFFORT_RUBRIC,
+  BUILTIN_EFFORT_LABELS,
   TIER_ORDER,
   bareCommand,
 } from './policy.ts'
@@ -198,8 +198,8 @@ export const register: Register = (on, options) => {
     } else {
       // No backend: the engine's own small-model classifier answers the same
       // questions, without the confidence the policy's threshold reads. The
-      // effort is asked separately, on the backend's own rubric, so a failure
-      // there still leaves the tier.
+      // effort is asked separately, on the backend's rubric reworded to carry
+      // its own question, so a failure there still leaves the tier.
       const classify = (labels: readonly string[]) =>
         $.model.classify(e.text, labels).catch((error: unknown) => {
           $.ui.log(`[model-router] built-in classifier failed: ${String(error)}`)
@@ -207,7 +207,7 @@ export const register: Register = (on, options) => {
         })
       const [label, effortLabel] = await Promise.all([
         classify(TIER_ORDER),
-        routeMainEffort ? classify(EFFORT_RUBRIC) : undefined,
+        routeMainEffort ? classify(BUILTIN_EFFORT_LABELS) : undefined,
       ])
       if (label) {
         decision = {
