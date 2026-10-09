@@ -1,0 +1,7 @@
+{
+  "name": "skyteklabs",
+  "owner": { "name": "SkyTek Labs" },
+  "plugins": [
+    { "name": "model-router",  "source": "./plugins/model-router",  "description": "Router to optimize the model selections based on the type of the job/task working using jev" }
+  ]
+}
