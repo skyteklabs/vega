@@ -179,6 +179,17 @@ test('by default the band is Indonesian and in rupiah', async ($, on) => {
   expect(await ui.find({ text: /Rp 40\.750 = / })).toBeDefined()
 })
 
+test('the band keeps what other plugins draw beneath it', async ($, on) => {
+  const clock = mock.clock(on)
+  mock.store(on)
+  mock.env(on, {})
+  engine(on, { usd: 2.5 })
+  await start($, clock)
+  const ui = await $.ui.mount(band)
+  expect(await ui.find({ text: /Rp 40\.750 = / })).toBeDefined()
+  expect(await ui.find({ text: /^below$/ })).toBeDefined()
+})
+
 test('in rupiah, the alert names a round rupiah amount', { options: { idrPerUsd: 16_000 } }, async ($, on) => {
   const clock = mock.clock(on)
   mock.store(on)

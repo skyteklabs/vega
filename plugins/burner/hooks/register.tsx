@@ -410,29 +410,35 @@ export const register: Register = (on, options) => {
       startSpark($, bar)
     }
 
+    // The band is shared: keep what the plugins beneath draw, under the meter.
+    const below = await next(e)
+
     return (
-      <Box gap={2} alignItems="flex-end">
-        <Box flexDirection="column">
-          <Text color={color} bold>{b.isDemo ? cfg.text.demo : cfg.text.burn}</Text>
-          <Text color={color} bold>{sessionLine}</Text>
-          <Text dimColor>{weekLine}</Text>
-        </Box>
-        {hasFire ? (
-          <Raster key="fire" columns={bar} rows={FIRE_ROWS} cells={fireCells(bar, level, level, now / 1000)} />
-        ) : (
-          <Text color={color}>{barText(bar, level)}</Text>
-        )}
-        <Box flexDirection="column">
-          <Text>
-            <Text color={isRolling ? color : PAPER} bold>{cash(b.shown)}</Text>
-            <Text color={GOLD}>{` ${thatIs(b.shown, which)}`}</Text>
-          </Text>
-          <Text dimColor>{used || cfg.text.noModelTurns}</Text>
-          <Box gap={2}>
-            <Text dimColor>{`${cfg.text.lifetime} ${cash(b.lifetime)}`}</Text>
-            <Button key="hide" label={cfg.text.hide} plain onPress={() => void update($, isHidden, () => true)} />
+      <Box flexDirection="column">
+        <Box gap={2} alignItems="flex-end">
+          <Box flexDirection="column">
+            <Text color={color} bold>{b.isDemo ? cfg.text.demo : cfg.text.burn}</Text>
+            <Text color={color} bold>{sessionLine}</Text>
+            <Text dimColor>{weekLine}</Text>
+          </Box>
+          {hasFire ? (
+            <Raster key="fire" columns={bar} rows={FIRE_ROWS} cells={fireCells(bar, level, level, now / 1000)} />
+          ) : (
+            <Text color={color}>{barText(bar, level)}</Text>
+          )}
+          <Box flexDirection="column">
+            <Text>
+              <Text color={isRolling ? color : PAPER} bold>{cash(b.shown)}</Text>
+              <Text color={GOLD}>{` ${thatIs(b.shown, which)}`}</Text>
+            </Text>
+            <Text dimColor>{used || cfg.text.noModelTurns}</Text>
+            <Box gap={2}>
+              <Text dimColor>{`${cfg.text.lifetime} ${cash(b.lifetime)}`}</Text>
+              <Button key="hide" label={cfg.text.hide} plain onPress={() => void update($, isHidden, () => true)} />
+            </Box>
           </Box>
         </Box>
+        {below}
       </Box>
     )
   })
