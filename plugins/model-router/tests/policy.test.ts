@@ -14,6 +14,7 @@ import {
   requestHeaders,
   requestModelId,
   route,
+  rubricScore,
   selectProvider,
   bareCommand,
 } from '../hooks/policy.ts'
@@ -400,4 +401,23 @@ test('a slash command alone is not a task; with text after it, it is', () => {
   for (const text of ['/simplify', ' /run ', '/code-review\n']) expect(bareCommand(text)).toBe(true)
   for (const text of ['/code-review high', '/simplify the retry loop', '/tmp/log.txt', '/', 'fix /api', 'rename foo'])
     expect(bareCommand(text)).toBe(false)
+})
+
+test('a rubric label from the built-in classifier reads as its score', () => {
+  expect(rubricScore('almost none')).toBe(0)
+  expect(rubricScore('as much as possible')).toBe(3)
+  expect(rubricScore('medium')).toBeNull()
+  expect(rubricScore(undefined)).toBeNull()
+})
+
+test('a built-in effort with no confidence may raise effort but never lower it', () => {
+  const builtin = (effort: number): Decision => ({
+    tier: 'deep',
+    confidence: null,
+    risky: null,
+    effort,
+    effortConfidence: null,
+  })
+  expect(route(builtin(2), { model: 'opus', effort: 'medium' }, config).effort).toBe('high')
+  expect(route(builtin(0), { model: 'opus', effort: 'medium' }, config).effort).toBeNull()
 })

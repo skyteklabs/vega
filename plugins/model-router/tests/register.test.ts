@@ -96,3 +96,45 @@ test(
     expect(authorization()).toBe('Bearer options-key')
   },
 )
+
+// With no key, the built-in classifier is asked the effort rubric beside the
+// tier, so the main loop's effort has a score to route on.
+test(
+  'the built-in classifier reports an effort score',
+  { options: { provider: 'builtin' } },
+  async ($, on) => {
+    mock.env(on, {})
+    mock.clock(on)
+    const asked: (readonly string[])[] = []
+    on('model.classify', async (_$, e, _next) => {
+      asked.push(e.labels)
+      return { value: e.labels.includes('deep') ? 'deep' : 'a lot' }
+    })
+    const lines: string[] = []
+    on('ui.log', async (_$, e, _next) => {
+      lines.push(e.text)
+      return { value: undefined }
+    })
+    on('prompt.submit', async (_$, e, _next) => e)
+    await $.prompt.submit(prompt)
+    expect(asked.length).toBe(2)
+    expect(lines.some((line) => line.includes('effort 2.0 → high'))).toBe(true)
+  },
+)
+
+test(
+  'the built-in classifier skips the effort question when effort routing is off',
+  { options: { provider: 'builtin', routeMainEffort: false } },
+  async ($, on) => {
+    mock.env(on, {})
+    mock.clock(on)
+    const asked: (readonly string[])[] = []
+    on('model.classify', async (_$, e, _next) => {
+      asked.push(e.labels)
+      return { value: 'deep' }
+    })
+    on('prompt.submit', async (_$, e, _next) => e)
+    await $.prompt.submit(prompt)
+    expect(asked.length).toBe(1)
+  },
+)

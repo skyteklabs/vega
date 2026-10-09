@@ -59,7 +59,7 @@ const TIER_CRITERIA: Record<Tier, string> = {
   deep: 'Hard or high-stakes: architecture and design, debugging a failure whose cause is unknown, security, data migrations, concurrency, anything touching production or money.',
 }
 
-const EFFORT_RUBRIC = ['almost none', 'some', 'a lot', 'as much as possible'] as const
+export const EFFORT_RUBRIC = ['almost none', 'some', 'a lot', 'as much as possible'] as const
 
 export const DEFAULT_BASE_URL: Record<Provider, string> = {
   typesafe: 'https://api.typesafe.ai',
@@ -216,6 +216,15 @@ function confidenceOf(answer: Record<string, unknown>): number | null {
   const probabilities = answer.probabilities as Record<string, number> | undefined
   const values = probabilities ? Object.values(probabilities) : []
   return values.length > 0 ? Math.max(...values) : null
+}
+
+/**
+ * A rubric label picked by the built-in classifier as the score (0..3) a
+ * backend would have sent, or null when the label is not one of the rubric's.
+ */
+export function rubricScore(label: string | undefined): number | null {
+  const index = EFFORT_RUBRIC.indexOf(label as (typeof EFFORT_RUBRIC)[number])
+  return index === -1 ? null : index
 }
 
 /** The rubric score (0..3) as a reasoning level. */

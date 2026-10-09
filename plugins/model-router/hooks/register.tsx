@@ -14,7 +14,7 @@
  * Three things it can set, each on its own switch:
  *   agent.spawn  — the model of each subagent (on by default)
  *   turn.step    — the reasoning effort of the main loop (on by default)
- *   turn.step    — the model of the main loop (off by default: switching
+ *   turn.step    — the model of the main loop (on by default; switching
  *                  models mid-session invalidates the prompt cache, which can
  *                  cost more than the cheaper tier saves)
  *
@@ -57,6 +57,8 @@ import {
   requestHeaders,
   requestModelId,
   route,
+  rubricScore,
+  EFFORT_RUBRIC,
   TIER_ORDER,
   bareCommand,
 } from './policy.ts'
@@ -195,20 +197,26 @@ export const register: Register = (on, options) => {
       }
     } else {
       // No backend: the engine's own small-model classifier answers the same
-      // question, without the confidence the policy's threshold reads.
-      try {
-        const label = await $.model.classify(e.text, TIER_ORDER)
-        if (label) {
-          decision = {
-            tier: label as Tier,
-            confidence: null,
-            risky: null,
-            effort: null,
-            effortConfidence: null,
-          }
+      // questions, without the confidence the policy's threshold reads. The
+      // effort is asked separately, on the backend's own rubric, so a failure
+      // there still leaves the tier.
+      const classify = (labels: readonly string[]) =>
+        $.model.classify(e.text, labels).catch((error: unknown) => {
+          $.ui.log(`[model-router] built-in classifier failed: ${String(error)}`)
+          return undefined
+        })
+      const [label, effortLabel] = await Promise.all([
+        classify(TIER_ORDER),
+        routeMainEffort ? classify(EFFORT_RUBRIC) : undefined,
+      ])
+      if (label) {
+        decision = {
+          tier: label as Tier,
+          confidence: null,
+          risky: null,
+          effort: rubricScore(effortLabel),
+          effortConfidence: null,
         }
-      } catch (error) {
-        $.ui.log(`[model-router] built-in classifier failed: ${String(error)}`)
       }
     }
 
