@@ -1,4 +1,4 @@
 {
-  "description": "The first-mod hooks module",
+  "description": "The nodel-router hooks module",
   "modules": ["./model-router.ts"]
 }
