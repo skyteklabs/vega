@@ -392,6 +392,10 @@ export function route(
       : null
 
   let effort: Effort | null = null
+  // What the policy would ask for, after risk and the unmeasured cap: the
+  // `kept` line names this, not the raw score, so a cap does not read as a
+  // refused upgrade.
+  let wantedEffort: Effort | null = null
   if (effortScore !== null) {
     const currentRank = effortRank(current.effort)
     let wantedRank = EFFORT_ORDER.indexOf(effortLevel(effortScore))
@@ -410,6 +414,7 @@ export function route(
     // A numeric effort is the caller's own scale, not this ladder; leave it.
     const comparable = typeof current.effort !== 'number'
     const wanted = EFFORT_ORDER[Math.min(EFFORT_ORDER.length - 1, wantedRank)] as Effort
+    wantedEffort = wanted
     if (
       comparable &&
       wantedRank !== currentRank &&
@@ -425,7 +430,6 @@ export function route(
     // Naming what it wanted and what it kept is the whole point of this line.
     // Without it, a mod that classified and decided to leave the request alone
     // is indistinguishable from one that never loaded.
-    const wantedEffort = effortScore === null ? null : effortLevel(effortScore)
     const kept = `${current.model}${current.effort === undefined ? '' : `/${current.effort}`}`
     const wanted = `${wantedModel}${wantedEffort ? `/${wantedEffort}` : ''}`
     return { model: null, effort: null, reason: `kept ${kept}, wanted ${wanted} (${said})` }

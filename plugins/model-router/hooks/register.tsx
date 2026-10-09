@@ -211,15 +211,25 @@ export const register: Register = (on, options) => {
       // questions, without the confidence the policy's threshold reads. The
       // effort is asked separately, on the backend's rubric reworded to carry
       // its own question, so a failure there still leaves the tier.
-      const classify = (labels: readonly string[]) =>
-        $.model.classify(e.text, labels).catch((error: unknown) => {
-          $.ui.log(`[model-router] built-in classifier failed: ${String(error)}`)
-          return undefined
-        })
       // The same latency budget as a backend, one deadline for both calls but
       // each raced on its own: an effort answer still out at the deadline
       // costs only the effort, never a tier that already came back.
       const deadline = $.clock.sleep(timeoutMs)
+      let pastDeadline = false
+      // A sleep still pending when the plugin unloads rejects; nothing to do then.
+      deadline.then(
+        () => {
+          pastDeadline = true
+        },
+        () => {},
+      )
+      // A call that fails after the deadline was already given up on; saying
+      // so then would land in the log after the turn has moved on.
+      const classify = (labels: readonly string[]) =>
+        $.model.classify(e.text, labels).catch((error: unknown) => {
+          if (!pastDeadline) $.ui.log(`[model-router] built-in classifier failed: ${String(error)}`)
+          return undefined
+        })
       const [label, effortLabel] = await Promise.all([
         within(classify(TIER_ORDER), deadline),
         routeMainEffort ? within(classify(BUILTIN_EFFORT_LABELS), deadline) : undefined,

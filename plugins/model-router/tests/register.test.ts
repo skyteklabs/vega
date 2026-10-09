@@ -234,3 +234,26 @@ test(
     expect(lines.some((line) => line.includes('passed 800ms; leaving the subagent alone'))).toBe(true)
   },
 )
+
+// A call given up on at the deadline that fails later is not reported: the
+// turn has already moved on, and the timeout line said what happened.
+test(
+  'a built-in classifier failing after timeoutMs is not logged',
+  { options: { provider: 'builtin', timeoutMs: 800 } },
+  async ($, on) => {
+    mock.env(on, {})
+    const clock = mock.clock(on)
+    on('model.classify', async (_$, _e, _next) => {
+      await clock.sleep(1000)
+      throw new Error('late')
+    })
+    on('prompt.submit', async (_$, e, _next) => e)
+    const lines = capturedLog(on)
+    const submitted = $.prompt.submit(prompt)
+    await clock.advance(800)
+    await submitted
+    await clock.advance(400)
+    expect(lines.some((line) => line.includes('leaving the turn alone'))).toBe(true)
+    expect(lines.some((line) => line.includes('built-in classifier failed'))).toBe(false)
+  },
+)

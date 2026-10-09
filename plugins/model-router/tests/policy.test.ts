@@ -433,3 +433,9 @@ test('an effort with no confidence raises a turn no higher than high', () => {
 test('the high cap does not apply to an effort forced by risk', () => {
   expect(route(unmeasured(3, 0.9), { model: 'opus', effort: 'medium' }, config).effort).toBe('xhigh')
 })
+
+test('a no-change held by the high cap names the capped effort, not the raw one', () => {
+  expect(route(unmeasured(3), { model: 'opus', effort: 'high' }, config).reason).toBe(
+    'kept opus/high, wanted opus/high (confidence n/d)',
+  )
+})
