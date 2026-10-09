@@ -69,7 +69,7 @@ Ask only about the gaps, using each field's `x-question`.
 - Ask in batches of up to five questions, grouped by template section.
 - Use AskUserQuestion for fields with fixed options: `project_type` (ask it first if the RFP doesn't settle it), `pricing_model`, `currency` (offer USD and IDR; Other covers the rest), `tax_treatment`, `assumptions`, `change_control` and `expenses` (standard or custom).
 - Ask everything else in plain chat.
-- Optional fields (not in the schema's `required`) go in one last batch, which the user may skip.
+- Optional fields (not in the schema's `required`) go in one last batch, which the user may skip. Always include `client_logo_path`: if the user has the client's logo as a PNG or JPG, its path replaces the cover's placeholder box; skipping it leaves the placeholder.
 
 Done when every required field has a value.
 

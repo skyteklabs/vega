@@ -3,6 +3,7 @@
 # dependencies = [
 #   "docxtpl>=0.18",
 #   "jsonschema>=4.21",
+#   "python-docx>=1.1",
 #   "docx2pdf>=0.1.8; sys_platform == 'darwin' or sys_platform == 'win32'",
 # ]
 # ///
@@ -28,7 +29,9 @@ import sys
 import tempfile
 from pathlib import Path
 
-from docxtpl import DocxTemplate, Listing
+from docx.image.image import Image as DocxImage
+from docx.shared import Inches
+from docxtpl import DocxTemplate, InlineImage, Listing
 from jinja2 import Environment, StrictUndefined
 from jsonschema import Draft202012Validator
 
@@ -37,7 +40,7 @@ DEFAULT_TEMPLATE = SKILL_DIR / "assets" / "sow-template.docx"
 SCHEMA_PATH = SKILL_DIR / "assets" / "sow.schema.json"
 
 # Template variables computed here rather than supplied in the data.
-COMPUTED = {"subtotal", "total_fees", "total_mandays"}
+COMPUTED = {"subtotal", "total_fees", "total_mandays", "client_logo"}
 # Schema properties that never reach the template.
 HIDDEN = {"_sources"}
 
@@ -80,6 +83,14 @@ def validate(data, schema):
             "invalid SOW data:\n  payment_schedule: amounts sum to "
             f"{scheduled:,.2f}, total cost is {total:,.2f}"
         )
+    if data.get("client_logo_path"):
+        path = Path(data["client_logo_path"])
+        if not path.is_file():
+            raise SowError(f"invalid SOW data:\n  client_logo_path: no such file: {path}")
+        try:
+            DocxImage.from_file(str(path))
+        except Exception as e:
+            raise SowError(f"invalid SOW data:\n  client_logo_path: not a readable image ({e})") from e
 
 
 def pricing(data):
@@ -140,13 +151,15 @@ def display(value):
     return value
 
 
-def build_context(data, schema):
+def build_context(data, schema, tpl):
     ctx = copy.deepcopy(data)
     for name, prop in schema["properties"].items():
         if name not in ctx:
             ctx[name] = copy.deepcopy(prop.get("default", [] if prop.get("type") == "array" else ""))
     for name in HIDDEN:
         ctx.pop(name, None)
+    if ctx.get("client_logo_path"):
+        ctx["client_logo"] = InlineImage(tpl, ctx["client_logo_path"], width=Inches(2.2))
     for d in ctx["deliverables"]:
         d.setdefault("format", "Document")
     for p in ctx["payment_schedule"]:
@@ -252,7 +265,7 @@ def render(data_path, template, out_dir, want_pdf=True):
 
     tpl = DocxTemplate(str(template))
     tpl.render(
-        build_context(data, schema),
+        build_context(data, schema, tpl),
         jinja_env=Environment(undefined=StrictUndefined),
         autoescape=True,
     )

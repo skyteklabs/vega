@@ -6,6 +6,7 @@ Each script runs through `uv run`, as the skill runs it, so the tests need
 only pytest; the scripts bring their own dependencies.
 """
 
+import base64
 import json
 import shutil
 import subprocess
@@ -13,6 +14,11 @@ import zipfile
 from pathlib import Path
 
 import pytest
+
+# A real 4x4 PNG, so python-docx's image parser accepts it.
+TINY_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAE0lEQVR4nGPkqjjBAANMcBZeDgBAugFS3uh6PAAAAABJRU5ErkJggg=="
+)
 
 SKILL = Path(__file__).resolve().parent.parent / "skills" / "create-sow"
 SCRIPTS = SKILL / "scripts"
@@ -187,6 +193,57 @@ def test_rejects_payment_schedule_mismatch(tmp_path):
     assert result.returncode == 2
     assert "payment_schedule" in result.stderr
     assert "67,000.00" in result.stderr and "66,000.00" in result.stderr
+    assert not list(tmp_path.glob("*.docx"))
+
+
+def test_client_logo_placeholder_by_default(tmp_path):
+    result = render(tmp_path, SAMPLE, "--no-pdf")
+    assert result.returncode == 0, result.stderr
+    xml = docx_xml(json.loads(result.stdout)["docx"])
+    assert "Customer logo" in xml
+    # Only the SkyTek logo and the watermark are embedded; no client logo.
+    assert len(zipfile.ZipFile(json.loads(result.stdout)["docx"]).namelist()) > 0
+    media = [n for n in zipfile.ZipFile(json.loads(result.stdout)["docx"]).namelist() if "media/" in n]
+    assert len(media) == 2
+
+
+def test_client_logo_embedded_when_given(tmp_path):
+    logo_path = tmp_path / "client-logo.png"
+    logo_path.write_bytes(TINY_PNG)
+    data = json.loads(SAMPLE.read_text())
+    data["client_logo_path"] = str(logo_path)
+    path = tmp_path / "with_logo.json"
+    path.write_text(json.dumps(data))
+    result = render(tmp_path, path, "--no-pdf")
+    assert result.returncode == 0, result.stderr
+    docx = json.loads(result.stdout)["docx"]
+    xml = docx_xml(docx)
+    assert "Customer logo" not in xml
+    media = [n for n in zipfile.ZipFile(docx).namelist() if "media/" in n]
+    assert len(media) == 3  # SkyTek logo, watermark, client logo
+
+
+def test_rejects_missing_client_logo(tmp_path):
+    data = json.loads(SAMPLE.read_text())
+    data["client_logo_path"] = str(tmp_path / "nope.png")
+    path = tmp_path / "missing_logo.json"
+    path.write_text(json.dumps(data))
+    result = render(tmp_path, path, "--no-pdf")
+    assert result.returncode == 2
+    assert "client_logo_path" in result.stderr
+    assert not list(tmp_path.glob("*.docx"))
+
+
+def test_rejects_unreadable_client_logo(tmp_path):
+    bad_path = tmp_path / "not-an-image.png"
+    bad_path.write_bytes(b"not a png")
+    data = json.loads(SAMPLE.read_text())
+    data["client_logo_path"] = str(bad_path)
+    path = tmp_path / "bad_logo.json"
+    path.write_text(json.dumps(data))
+    result = render(tmp_path, path, "--no-pdf")
+    assert result.returncode == 2
+    assert "client_logo_path" in result.stderr
     assert not list(tmp_path.glob("*.docx"))
 
 

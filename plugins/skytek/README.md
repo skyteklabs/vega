@@ -47,7 +47,7 @@ Scripts run with [`uv`](https://docs.astral.sh/uv/) and declare their own depend
 9. Costs (package items or effort in mandays, extra fees, payment milestones, expenses, taxes)
 10. Acceptance (signatures)
 
-The cover and the header on later pages carry the SkyTek logo. The builder rasterises it from `assets/skytek-logo.svg`, because a Word template made with python-docx can't embed SVG. After changing the layout or the logo, rebuild:
+The cover and the header on later pages carry the SkyTek logo, next to a labelled placeholder for the client's. The builder rasterises the SkyTek logo from `assets/skytek-logo.svg`, because a Word template made with python-docx can't embed SVG, and reuses it as a watermark, turned 45° at 20% opacity, anchored behind the text of every page. After changing the layout or the logo, rebuild:
 
 ```sh
 uv run skills/create-sow/scripts/build_template.py
@@ -75,7 +75,7 @@ uv run skills/create-sow/scripts/render_sow.py --check-template [--template path
 
 | Section | Fields |
 |---|---|
-| Cover and preamble | `project_title`, `client_name`, `client_address`, `vendor_name`, `vendor_address`, `sow_date`, `version`, `author`, `msa_reference`, `governing_law` |
+| Cover and preamble | `project_title`, `client_name`, `client_address`, `vendor_name`, `vendor_address`, `sow_date`, `version`, `author`, `client_logo_path` (PNG/JPG; empty shows a placeholder), `msa_reference`, `governing_law` |
 | 1. Executive Summary | `executive_summary`, `objectives[]`, `vendor_overview`, `client_overview` |
 | 2. Requirements | `functional_requirements[]`, `non_functional_requirements[]`, `architecture_overview`, `architecture_components[]` (`name`, `description`), `integrations[]` (`name`, `description`) |
 | 3. Activities | `phases[]` (`name`, `focus`, `tasks[]`) |
@@ -104,6 +104,8 @@ Older `.sow.json` files fail validation:
 | `vendorName` | `SkyTek Labs` | Vendor on the cover, footer and signature block |
 | `vendorAddress`, `vendorSignatoryName`, `vendorSignatoryTitle`, `vendorOverview` | empty | Vendor defaults; when empty, the skill asks |
 
+Fees, mandays and rates aside, `client_logo_path` is the one field worth asking for even though the schema doesn't require it: if the client sent a logo file, pass its path so the cover uses it instead of the placeholder.
+
 ## Tests
 
 `tests/test_render.py` covers:
@@ -112,6 +114,7 @@ Older `.sow.json` files fail validation:
 - no tags left in the output;
 - formatting of dates, money, escaping and line breaks;
 - fallbacks for optional fields and empty lists;
+- the client-logo placeholder, embedding a given logo, and rejecting a missing or unreadable one;
 - package and effort pricing, and rejecting pricing that doesn't match `project_type`;
 - discount lines and rejecting a negative total;
 - versioned file names;

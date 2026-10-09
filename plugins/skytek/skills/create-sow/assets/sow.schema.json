@@ -84,6 +84,12 @@
       "description": "Who wrote the SOW, shown on the cover. Empty omits the line.",
       "x-question": "Who should be named as the SOW's author?"
     },
+    "client_logo_path": {
+      "type": "string",
+      "default": "",
+      "description": "Local path to the client's logo (PNG or JPG; SVG cannot be embedded). Empty leaves a labelled placeholder on the cover.",
+      "x-question": "Do you have the client's logo as a PNG or JPG to place on the cover? If so, its file path."
+    },
     "client_name": {
       "type": "string",
       "minLength": 1,

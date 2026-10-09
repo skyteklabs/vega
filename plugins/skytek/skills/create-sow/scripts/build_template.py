@@ -1,13 +1,14 @@
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["python-docx>=1.1", "resvg-py>=0.2"]
+# dependencies = ["python-docx>=1.1", "resvg-py>=0.2", "Pillow>=10"]
 # ///
 """Build the SkyTek SOW template (assets/sow-template.docx).
 
 Section layout follows the Google DAF/PSF partner SOW template, without its
 Google funding text. Every docxtpl tag is written as a single run, so Word
 never splits it. The logo is rasterised from assets/skytek-logo.svg, since
-Word templates built with python-docx cannot embed SVG.
+Word templates built with python-docx cannot embed SVG. The same artwork,
+turned 45° at 20% opacity, is anchored behind the text of every page as a watermark.
 
     uv run build_template.py [--out PATH]
 """
@@ -19,11 +20,15 @@ from pathlib import Path
 
 import resvg_py
 from docx import Document
-from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
+from PIL import Image
+
+WATERMARK_OPACITY = 0.2
+WATERMARK_ANGLE = 45  # degrees, counter-clockwise
 
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
 DEFAULT_OUT = ASSETS / "sow-template.docx"
@@ -60,6 +65,61 @@ def logo_png():
         svg,
     )
     return bytes(resvg_py.svg_to_bytes(svg_string=svg, width=1600))
+
+
+def watermark_png():
+    """The logo at WATERMARK_OPACITY, turned WATERMARK_ANGLE, baked into the pixels.
+
+    Baking alpha and rotation in (rather than OOXML transparency and rotation
+    attributes) keeps LibreOffice's headless PDF conversion faithful.
+    """
+    img = Image.open(io.BytesIO(logo_png())).convert("RGBA")
+    img = img.rotate(WATERMARK_ANGLE, expand=True, resample=Image.BICUBIC)
+    r, g, b, a = img.split()
+    img.putalpha(a.point(lambda v: int(v * WATERMARK_OPACITY)))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def floating(paragraph, image_bytes, width, height, behind=True):
+    """Anchor a picture to the page, centered, optionally behind the text."""
+    run = paragraph.add_run()
+    run.add_picture(io.BytesIO(image_bytes), width=width, height=height)
+    drawing = run._r.find(qn("w:drawing"))
+    inline = drawing.find(qn("wp:inline"))
+
+    anchor = OxmlElement("wp:anchor")
+    for attr, value in {
+        "distT": "0", "distB": "0", "distL": "0", "distR": "0",
+        "simplePos": "0", "relativeHeight": "1", "locked": "0",
+        "layoutInCell": "1", "allowOverlap": "1", "behindDoc": "1" if behind else "0",
+    }.items():
+        anchor.set(attr, value)
+
+    simple_pos = OxmlElement("wp:simplePos")
+    simple_pos.set("x", "0")
+    simple_pos.set("y", "0")
+    anchor.append(simple_pos)
+    for tag_name in ("positionH", "positionV"):
+        pos = OxmlElement(f"wp:{tag_name}")
+        pos.set("relativeFrom", "page")
+        align = OxmlElement("wp:align")
+        align.text = "center"
+        pos.append(align)
+        anchor.append(pos)
+    for child in ("wp:extent", "wp:effectExtent"):
+        el = inline.find(qn(child))
+        if el is not None:
+            anchor.append(el)
+    anchor.append(OxmlElement("wp:wrapNone"))
+    for child in ("wp:docPr", "wp:cNvGraphicFramePr", "a:graphic"):
+        el = inline.find(qn(child))
+        if el is not None:
+            anchor.append(el)
+
+    drawing.remove(inline)
+    drawing.append(anchor)
 
 
 def shade(cell, hex_fill):
@@ -124,10 +184,14 @@ def style_doc(doc):
     section.header_distance = section.footer_distance = Inches(0.45)
 
 
-def header_footer(doc, logo):
+def header_footer(doc, logo, watermark):
     section = doc.sections[0]
-    # The cover shows the large logo, so its header and footer stay empty.
+    # The cover shows the large logo, so its header and footer carry no logo text there.
     section.different_first_page_header_footer = True
+
+    # The watermark sits on every page, cover included.
+    floating(section.first_page_header.paragraphs[0], watermark, Inches(5.5), None)
+    floating(section.header.paragraphs[0], watermark, Inches(5.5), None)
 
     head = section.header.paragraphs[0]
     head.add_run().add_picture(io.BytesIO(logo), width=Inches(1.1))
@@ -231,9 +295,40 @@ def page_break(doc):
     doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
 
 
+def dashed_border(cell):
+    tc_pr = cell._tc.get_or_add_tcPr()
+    borders = OxmlElement("w:tcBorders")
+    for side in ("top", "left", "bottom", "right"):
+        el = OxmlElement(f"w:{side}")
+        el.set(qn("w:val"), "dashed")
+        el.set(qn("w:sz"), "6")
+        el.set(qn("w:color"), "A6ACB0")
+        borders.append(el)
+    tc_pr.append(borders)
+
+
+def logos(doc, logo):
+    """Vendor logo and a slot for the client's, side by side."""
+    table = doc.add_table(rows=1, cols=2)
+    table.autofit = False
+    left, right = table.rows[0].cells
+    left.paragraphs[0].add_run().add_picture(io.BytesIO(logo), width=Inches(2.2))
+    right.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
+    dashed_border(right)
+    p = right.paragraphs[0]
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.paragraph_format.space_before = Pt(28)
+    p.paragraph_format.space_after = Pt(28)
+    p.add_run(
+        "{% if client_logo_path %}{{ client_logo }}{% else %}Customer logo{% endif %}"
+    ).font.color.rgb = MUTED
+    set_widths(table, [3.0, 3.0])
+    return table
+
+
 def cover(doc, logo):
-    doc.add_paragraph().add_run().add_picture(io.BytesIO(logo), width=Inches(2.6))
-    for _ in range(5):
+    logos(doc, logo)
+    for _ in range(4):
         para(doc)
     para(doc, "Scope of Work", bold=True, size=34, color=INK, after=4)
     para(doc, "{{ project_title }}", size=18, color=BLUE, after=36)
@@ -295,7 +390,7 @@ def build(out: Path):
     doc = Document()
     style_doc(doc)
     logo = logo_png()
-    header_footer(doc, logo)
+    header_footer(doc, logo, watermark_png())
     cover(doc, logo)
     preamble(doc)
 
