@@ -410,6 +410,34 @@ test('/burn lifetime rotates the comparison like the band', { options: { idrPerU
   expect(String((await burnCommand($, 'lifetime')).text)).toContain('mangkuk bakso')
 })
 
+const pane = {
+  plugin: 'burner',
+  component: 'Pane' as const,
+  requestId: 'burn',
+  surface: 'terminal' as const,
+  props: { title: 'Burner', isFocused: false, bodyColumns: 60, placement: 'inline' as const, scroll: { offset: 0, bodyRows: 20 }, view: {} },
+}
+
+test('the pane title burns in letter by letter when it opens, then settles', { options: { language: 'en' } }, async ($, on) => {
+  const clock = mock.clock(on)
+  mock.store(on)
+  mock.env(on, {})
+  engine(on, { usd: 1 })
+  await start($, clock)
+  await burnCommand($, 'panel')
+
+  // Just opened: the first letter is on its own as an unlit ember, not the resting gold.
+  const opening = await $.ui.mount(pane)
+  expect((await opening.find({ type: 'Text', text: /^S$/ }))?.props.color).toBe('#241a14')
+  await opening.unmount()
+
+  // Past the whole burn-in: one flat gold title again, no more lone letters.
+  await clock.advance(2000)
+  const settled = await $.ui.mount(pane)
+  expect((await settled.find({ type: 'Text', text: /^SESSION BURN$/ }))?.props.color).toBe('#c2a87e')
+  expect(await settled.find({ type: 'Text', text: /^S$/ })).toBeUndefined()
+})
+
 const terminalBand = { ...band, surface: 'terminal' as const }
 
 test('the band\'s fire comes back after a rejected blit', async ($, on) => {
