@@ -24,7 +24,7 @@ from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import Inches, Pt, RGBColor
+from docx.shared import Inches, Mm, Pt, RGBColor
 from PIL import Image
 
 WATERMARK_OPACITY = 0.2
@@ -39,7 +39,32 @@ BLUE = RGBColor(0x00, 0x64, 0xE0)
 INK = RGBColor(0x1C, 0x2B, 0x33)
 MUTED = RGBColor(0x5F, 0x6B, 0x73)
 HEADER_FILL = "0064E0"
-FONT = "Arial"
+
+# Body copy: TWK Lausanne 300. Headings and titles: TWK Everett,
+# picked proportionally to prominence — heavier weight for bigger, more prominent text.
+CONTENT_FONT = "TWK Lausanne 300"
+BOLD_FONT = "TWK Lausanne 550"        # table header rows and bold labels, not faux-bolded 350
+TITLE_FONT = "TWK Everett Black"      # 800 — the document's own title (cover hero)
+H1_FONT = "TWK Everett Bold"          # 700 — numbered section headings
+H2_FONT = "TWK Everett Medium"        # 500 — subsection headings and subtitles
+
+# Standard content size is 11pt (was 10.5); heading and title sizes below are scaled
+# by the same 11/10.5 ratio and rounded to the nearest half point.
+NORMAL_SIZE = 11
+H1_SIZE = 19      # was 18
+H2_SIZE = 13.5    # was 13
+TITLE_SIZE = 33.5  # was 32 (the "Title" style itself; unused directly, kept for parity)
+
+# A4 content width (page 8.27in minus 1in margins each side), was 6.5in on Letter.
+# Table column widths below are hand-tuned inches on that old 6.5in budget; W()
+# rescales them to fit today's CONTENT_WIDTH_IN without re-deriving each one.
+CONTENT_WIDTH_IN = 6.27
+_LETTER_CONTENT_WIDTH_IN = 6.5
+
+
+def W(*widths_in):
+    ratio = CONTENT_WIDTH_IN / _LETTER_CONTENT_WIDTH_IN
+    return [round(w * ratio, 2) for w in widths_in]
 
 SECTIONS = [
     "Executive Summary",
@@ -155,22 +180,28 @@ def field(paragraph, instr, size, color):
 
 def style_doc(doc):
     normal = doc.styles["Normal"]
-    normal.font.name = FONT
-    normal.element.rPr.rFonts.set(qn("w:eastAsia"), FONT)
-    normal.font.size = Pt(10.5)
+    normal.font.name = CONTENT_FONT
+    normal.element.rPr.rFonts.set(qn("w:eastAsia"), CONTENT_FONT)
+    normal.font.size = Pt(NORMAL_SIZE)
     normal.font.color.rgb = INK
     normal.paragraph_format.space_after = Pt(6)
     normal.paragraph_format.line_spacing = 1.15
-    for name, size, color in (("Heading 1", 18, BLUE), ("Heading 2", 13, INK), ("Title", 32, INK)):
+    headings = (
+        ("Heading 1", H1_SIZE, BLUE, H1_FONT),
+        ("Heading 2", H2_SIZE, INK, H2_FONT),
+        ("Title", TITLE_SIZE, INK, TITLE_FONT),
+    )
+    for name, size, color, font in headings:
         st = doc.styles[name]
         # Drop theme fonts so the explicit font wins.
         rfonts = st.element.get_or_add_rPr().find(qn("w:rFonts"))
         if rfonts is not None:
             for attr in ("w:asciiTheme", "w:hAnsiTheme", "w:eastAsiaTheme", "w:cstheme"):
                 rfonts.attrib.pop(qn(attr), None)
-        st.font.name = FONT
+        st.font.name = font
         st.font.size = Pt(size)
-        st.font.bold = True
+        # No synthetic bold: the picked TWK Everett weight already carries it.
+        st.font.bold = False
         st.font.color.rgb = color
     doc.styles["Heading 1"].paragraph_format.space_before = Pt(18)
     doc.styles["Heading 1"].paragraph_format.space_after = Pt(8)
@@ -178,7 +209,7 @@ def style_doc(doc):
     doc.styles["Heading 2"].paragraph_format.space_after = Pt(4)
 
     section = doc.sections[0]
-    section.page_width, section.page_height = Inches(8.5), Inches(11)
+    section.page_width, section.page_height = Mm(210), Mm(297)  # A4
     for side in ("left_margin", "right_margin", "top_margin", "bottom_margin"):
         setattr(section, side, Inches(1))
     section.header_distance = section.footer_distance = Inches(0.45)
@@ -204,7 +235,7 @@ def header_footer(doc, logo, watermark):
     field(foot, "PAGE", Pt(8), MUTED)
 
 
-def para(doc, text="", *, bold=False, size=None, color=None, align=None, after=None, style=None):
+def para(doc, text="", *, bold=False, size=None, color=None, align=None, after=None, style=None, font=None):
     p = doc.add_paragraph(style=style)
     if text:
         run = p.add_run(text)
@@ -213,6 +244,8 @@ def para(doc, text="", *, bold=False, size=None, color=None, align=None, after=N
             run.font.size = Pt(size)
         if color is not None:
             run.font.color.rgb = color
+        if font is not None:
+            run.font.name = font
     if align is not None:
         p.alignment = align
     if after is not None:
@@ -244,7 +277,7 @@ def header_row(table, headers):
     for i, text in enumerate(headers):
         cell = table.rows[0].cells[i]
         run = cell.paragraphs[0].add_run(text)
-        run.bold = True
+        run.font.name = BOLD_FONT
         run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
         shade(cell, HEADER_FILL)
     # Repeat the header row when a table runs onto the next page.
@@ -277,8 +310,8 @@ def loop_table(doc, headers, loop, cells, total=None, widths=None):
     table.rows[3].cells[0].text = "{%tr endfor %}"
     if total:
         for i, text in enumerate(total):
-            table.rows[4].cells[i].paragraphs[0].add_run(text).bold = True
-    set_widths(table, widths or [6.5 / len(headers)] * len(headers))
+            table.rows[4].cells[i].paragraphs[0].add_run(text).font.name = BOLD_FONT
+    set_widths(table, widths or [CONTENT_WIDTH_IN / len(headers)] * len(headers))
     doc.add_paragraph()
     return table
 
@@ -322,7 +355,7 @@ def logos(doc, logo):
     p.add_run(
         "{% if client_logo_path %}{{ client_logo }}{% else %}Customer logo{% endif %}"
     ).font.color.rgb = MUTED
-    set_widths(table, [3.0, 3.0])
+    set_widths(table, W(3.0, 3.0))
     return table
 
 
@@ -330,8 +363,8 @@ def cover(doc, logo):
     logos(doc, logo)
     for _ in range(4):
         para(doc)
-    para(doc, "Scope of Work", bold=True, size=34, color=INK, after=4)
-    para(doc, "{{ project_title }}", size=18, color=BLUE, after=36)
+    para(doc, "Scope of Work", size=35.5, color=INK, after=4, font=TITLE_FONT)
+    para(doc, "{{ project_title }}", size=H1_SIZE, color=BLUE, after=36, font=H1_FONT)
 
     rows = [
         ("Prepared for", "{{ client_name }}"),
@@ -351,8 +384,8 @@ def cover(doc, logo):
         lab = cells[0].paragraphs[0].add_run(label)
         lab.font.color.rgb = MUTED
         lab.font.size = Pt(10)
-        cells[1].paragraphs[0].add_run(value).bold = True
-    set_widths(table, [1.5, 5.0])
+        cells[1].paragraphs[0].add_run(value).font.name = BOLD_FONT
+    set_widths(table, W(1.5, 5.0))
     for _ in range(4):
         para(doc)
     para(
@@ -367,8 +400,8 @@ def cover(doc, logo):
 
 
 def preamble(doc):
-    para(doc, "Scope of Work", bold=True, size=22, color=INK, after=0)
-    para(doc, "{{ project_title }}", size=14, color=BLUE, after=12)
+    para(doc, "Scope of Work", size=23, color=INK, after=0, font=H1_FONT)
+    para(doc, "{{ project_title }}", size=14.5, color=BLUE, after=12, font=H2_FONT)
     doc.add_paragraph(
         "This Scope of Work (“SOW”) is agreed upon and entered into by and between "
         "{{ vendor_name }}, of {{ vendor_address }} (the “Vendor”), and {{ client_name }}"
@@ -380,7 +413,7 @@ def preamble(doc):
         "between the parties on its subject matter.{% endif %}"
         "{% if governing_law %} This SOW is governed by the laws of {{ governing_law }}.{% endif %}"
     )
-    para(doc, "Contents", bold=True, size=13, color=INK, after=4).paragraph_format.space_before = Pt(18)
+    para(doc, "Contents", size=H2_SIZE, color=INK, after=4, font=H2_FONT).paragraph_format.space_before = Pt(18)
     for i, name in enumerate(SECTIONS, 1):
         para(doc, f"{i}.  {name}", after=2)
     page_break(doc)
@@ -417,7 +450,7 @@ def build(out: Path):
     )
     loop_table(
         doc, ["#", "Functional requirement"], "r in functional_requirements",
-        ["{{ loop.index }}", "{{ r }}"], widths=[0.5, 6.0],
+        ["{{ loop.index }}", "{{ r }}"], widths=W(0.5, 6.0),
     )
     h2(doc, "2.2 Non-functional requirements")
     tag(doc, "{%p if non_functional_requirements %}")
@@ -427,7 +460,7 @@ def build(out: Path):
     )
     loop_table(
         doc, ["#", "Non-functional requirement"], "r in non_functional_requirements",
-        ["{{ loop.index }}", "{{ r }}"], widths=[0.5, 6.0],
+        ["{{ loop.index }}", "{{ r }}"], widths=W(0.5, 6.0),
     )
     tag(doc, "{%p else %}")
     doc.add_paragraph("No non-functional requirements specified.")
@@ -445,7 +478,7 @@ def build(out: Path):
     doc.add_paragraph("The core components of the solution are:")
     loop_table(
         doc, ["Component", "Role in the solution"], "c in architecture_components",
-        ["{{ c.name }}", "{{ c.description }}"], widths=[2.0, 4.5],
+        ["{{ c.name }}", "{{ c.description }}"], widths=W(2.0, 4.5),
     )
     doc.add_paragraph("The list of components may change as the design is finalised.")
     tag(doc, "{%p endif %}")
@@ -453,7 +486,7 @@ def build(out: Path):
     doc.add_paragraph("The following integrations with the Client’s existing environment are in scope:")
     loop_table(
         doc, ["Integration", "Source, target and purpose"], "i in integrations",
-        ["{{ i.name }}", "{{ i.description }}"], widths=[2.0, 4.5],
+        ["{{ i.name }}", "{{ i.description }}"], widths=W(2.0, 4.5),
     )
     tag(doc, "{%p endif %}")
 
@@ -475,7 +508,7 @@ def build(out: Path):
         ["Phase", "Deliverable", "Description", "Format"],
         "d in deliverables",
         ["{{ d.phase }}", "{{ d.name }}", "{{ d.description }}", "{{ d.format }}"],
-        widths=[1.4, 1.6, 2.4, 1.1],
+        widths=W(1.4, 1.6, 2.4, 1.1),
     )
     doc.add_paragraph("{{ acceptance_criteria }}")
 
@@ -502,7 +535,7 @@ def build(out: Path):
     )
     loop_table(
         doc, ["Risk", "Mitigation"], "k in risks",
-        ["{{ k.risk }}", "{{ k.mitigation }}"], widths=[2.5, 4.0],
+        ["{{ k.risk }}", "{{ k.mitigation }}"], widths=W(2.5, 4.0),
     )
     tag(doc, "{%p else %}")
     doc.add_paragraph("No specific risks identified at the time of writing.")
@@ -524,24 +557,24 @@ def build(out: Path):
         "reviewed regularly with the Client."
     )
     p = doc.add_paragraph()
-    p.add_run("Start date (estimated): ").bold = True
+    p.add_run("Start date (estimated): ").font.name = BOLD_FONT
     p.add_run("{{ start_date }}")
     p = doc.add_paragraph()
-    p.add_run("End date (estimated): ").bold = True
+    p.add_run("End date (estimated): ").font.name = BOLD_FONT
     p.add_run("{{ end_date }}, pending acceptance of all deliverables")
     loop_table(
         doc,
         ["Phase", "Period", "Activities and outcomes"],
         "t in timeline",
         ["{{ t.phase }}", "{{ t.period }}", "{{ t.activities }}"],
-        widths=[1.7, 1.2, 3.6],
+        widths=W(1.7, 1.2, 3.6),
     )
 
     h1(doc, 8)
     doc.add_paragraph("The Vendor will provide the following roles for this engagement.")
     loop_table(
         doc, ["Vendor role", "Responsibilities"], "r in vendor_roles",
-        ["{{ r.role }}", "{{ r.responsibilities }}"], widths=[2.2, 4.3],
+        ["{{ r.role }}", "{{ r.responsibilities }}"], widths=W(2.2, 4.3),
     )
     tag(doc, "{%p if client_roles %}")
     doc.add_paragraph(
@@ -550,7 +583,7 @@ def build(out: Path):
     )
     loop_table(
         doc, ["Client role", "Responsibilities"], "r in client_roles",
-        ["{{ r.role }}", "{{ r.responsibilities }}"], widths=[2.2, 4.3],
+        ["{{ r.role }}", "{{ r.responsibilities }}"], widths=W(2.2, 4.3),
     )
     tag(doc, "{%p else %}")
     doc.add_paragraph("The Client’s project roles will be confirmed at kick-off.")
@@ -568,7 +601,7 @@ def build(out: Path):
         "i in package_items",
         ["{{ i.item }}", "{{ i.description }}", "{{ i.quantity }}", "{{ i.unit_price }}", "{{ i.amount }}"],
         total=[subtotal_label, "", "", "", "{{ subtotal }}"],
-        widths=[1.6, 2.0, 0.6, 1.15, 1.15],
+        widths=W(1.6, 2.0, 0.6, 1.15, 1.15),
     )
     tag(doc, "{%p else %}")
     doc.add_paragraph("Professional services are estimated by role in mandays:")
@@ -578,7 +611,7 @@ def build(out: Path):
         "e in effort",
         ["{{ e.role }}", "{{ e.mandays }}", "{{ e.day_rate }}", "{{ e.amount }}"],
         total=[subtotal_label, "{{ total_mandays }}", "", "{{ subtotal }}"],
-        widths=[2.6, 1.0, 1.4, 1.5],
+        widths=W(2.6, 1.0, 1.4, 1.5),
     )
     tag(doc, "{%p endif %}")
     tag(doc, "{%p if fees %}")
@@ -586,7 +619,7 @@ def build(out: Path):
     loop_table(
         doc, ["Item", "Amount"], "f in fees",
         ["{{ f.item }}", "{{ f.amount }}"],
-        total=["Total cost", "{{ total_fees }}"], widths=[5.0, 1.5],
+        total=["Total cost", "{{ total_fees }}"], widths=W(5.0, 1.5),
     )
     tag(doc, "{%p endif %}")
     doc.add_paragraph(
@@ -598,7 +631,7 @@ def build(out: Path):
         ["Milestone", "Deliverable(s)", "Estimated completion", "Payment"],
         "p in payment_schedule",
         ["{{ p.milestone }}", "{{ p.deliverables }}", "{{ p.due }}", "{{ p.amount }}"],
-        widths=[1.5, 2.4, 1.3, 1.3],
+        widths=W(1.5, 2.4, 1.3, 1.3),
     )
     doc.add_paragraph("Payment terms: {{ payment_terms }}.")
     h2(doc, "9.2 Expenses")
@@ -618,7 +651,7 @@ def build(out: Path):
     sig = doc.add_table(rows=5, cols=2)
     sig.style = "Table Grid"
     sig.alignment = WD_TABLE_ALIGNMENT.CENTER
-    set_widths(sig, [3.25, 3.25])
+    set_widths(sig, W(3.25, 3.25))
     rows = [
         ("For {{ client_name }}", "For {{ vendor_name }}"),
         ("Name: {{ client_signatory_name }}", "Name: {{ vendor_signatory_name }}"),
@@ -630,7 +663,7 @@ def build(out: Path):
         sig.rows[r].cells[0].text = left
         sig.rows[r].cells[1].text = right
     for cell in sig.rows[0].cells:
-        cell.paragraphs[0].runs[0].bold = True
+        cell.paragraphs[0].runs[0].font.name = BOLD_FONT
         cell.paragraphs[0].runs[0].font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
         shade(cell, HEADER_FILL)
 
@@ -642,4 +675,15 @@ def build(out: Path):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
-    print(build(parser.parse_args().out))
+    parser.add_argument(
+        "--no-embed-fonts", action="store_true",
+        help="skip embedding TWK Everett/Lausanne into the saved .docx",
+    )
+    args = parser.parse_args()
+    out = build(args.out)
+    if not args.no_embed_fonts:
+        import embed_fonts
+
+        result = embed_fonts.embed(out, out)
+        print(f"embedded: {', '.join(result['embedded'])}")
+    print(out)

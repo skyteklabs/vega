@@ -5,3 +5,10 @@ __pycache__/
 .DS_Store
 plugins/skytek/skills/create-sow/example-docs/
 sow/
+# Only the font faces embed_fonts.py embeds are committed; the rest stay local.
+plugins/skytek/skills/create-sow/assets/fonts/**/*.otf
+!plugins/skytek/skills/create-sow/assets/fonts/TWKEverett/TWKEverett-Black.otf
+!plugins/skytek/skills/create-sow/assets/fonts/TWKEverett/TWKEverett-Bold.otf
+!plugins/skytek/skills/create-sow/assets/fonts/TWKEverett/TWKEverett-Medium.otf
+!plugins/skytek/skills/create-sow/assets/fonts/TWKLausanne/TWKLausanne-300.otf
+!plugins/skytek/skills/create-sow/assets/fonts/TWKLausanne/TWKLausanne-550.otf
