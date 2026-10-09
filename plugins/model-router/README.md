@@ -17,9 +17,9 @@ Three switches, and they are not equally safe:
 |---|---|---|
 | `routeSubagentModel` | the model of each subagent, at `agent.spawn` | on |
 | `routeMainEffort` | the reasoning effort of the main conversation, at `turn.step` | on |
-| `routeMainModel` | the model of the main conversation, at `turn.step` | **off** |
+| `routeMainModel` | the model of the main conversation, at `turn.step` | **on** |
 
-A subagent starts with its own context, so routing its model costs nothing beyond the classification. Changing the main loop's *model* mid-session is the expensive one: it invalidates the prompt cache, and on a long context re-caching can cost more than the cheaper tier saves. Turn it on once you have measured your own sessions, not before.
+A subagent starts with its own context, so routing its model costs nothing beyond the classification. Changing the main loop's *model* mid-session is the expensive one: it invalidates the prompt cache, and on a long context re-caching can cost more than the cheaper tier saves. Turn it off if re-caching costs matter for your sessions.
 
 The Agent tool has no effort parameter, so a subagent's effort is not this mod's to set.
 
@@ -136,7 +136,7 @@ With a key set, the prompt text leaves the machine and goes to whichever backend
   minDowngradeConfidence: number  bar to spend less (default 0.6)
   routeSubagentModel:     boolean model of each subagent (default true)
   routeMainEffort:        boolean effort of the main loop (default true)
-  routeMainModel:         boolean model of the main loop (default false)
+  routeMainModel:         boolean model of the main loop (default true)
   timeoutMs:              number  latency budget per classification (default 800)
   logDecisions:           boolean log each decision (default true)
 ```
@@ -166,7 +166,7 @@ wrong key every option stays at its default, and the `ready on` line reports
 ## Install
 
 ```sh
-/plugin install model-router --marketplace muhx/model-router
+/plugin install model-router@skyteklabs
 ```
 
 Answer `y` to add the marketplace, then pick a scope (user scope loads it in
