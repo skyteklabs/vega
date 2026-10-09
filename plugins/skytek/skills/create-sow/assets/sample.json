@@ -1,0 +1,70 @@
+{
+  "sow_date": "2026-10-09",
+  "version": "1.0",
+  "client_name": "Acme Logistics Pte. Ltd.",
+  "client_address": "1 Harbourfront Ave, Singapore 098632",
+  "client_signatory_name": "Mei Lin Tan",
+  "client_signatory_title": "Head of Operations",
+  "project_title": "Fleet Tracking Platform Migration",
+  "vendor_name": "SkyTek Labs",
+  "vendor_address": "Jl. Sudirman Kav. 52-53, Jakarta 12190, Indonesia",
+  "vendor_signatory_name": "Jane Doe",
+  "vendor_signatory_title": "Managing Director",
+  "background": "Acme runs fleet tracking on a self-hosted platform that is near end of life.\nOutages during peak season & slow reports drive this migration.",
+  "objectives": [
+    "Move fleet tracking to a managed cloud platform with no data loss",
+    "Cut report generation time from hours to minutes",
+    "Hand over runbooks so Acme's team can operate the platform"
+  ],
+  "in_scope": [
+    "Assessment of the current platform and data",
+    "Target architecture on AWS",
+    "Data migration of 3 years of tracking history",
+    "Cut-over and two weeks of hypercare"
+  ],
+  "out_of_scope": [
+    "Changes to in-vehicle hardware",
+    "Mobile driver app redesign"
+  ],
+  "deliverables": [
+    { "name": "Assessment report", "description": "Current state, risks, data inventory", "due": "2026-11-06" },
+    { "name": "Target architecture", "description": "Design document and cost model", "due": "2026-11-20" },
+    { "name": "Migrated platform", "description": "Production environment with migrated data", "due": "2027-01-29" },
+    { "name": "Runbooks", "description": "Operations and incident runbooks", "due": "Week 18" }
+  ],
+  "start_date": "2026-10-26",
+  "end_date": "2027-02-26",
+  "milestones": [
+    { "name": "Kick-off", "date": "2026-10-26", "description": "Access, contacts, plan agreed" },
+    { "name": "Design sign-off", "date": "2026-11-27" },
+    { "name": "Go-live", "date": "2027-01-29", "description": "Cut-over weekend" }
+  ],
+  "roles": [
+    { "party": "SkyTek Labs", "responsibility": "Delivery, architecture, migration, hypercare" },
+    { "party": "Acme Logistics", "responsibility": "System access, subject-matter experts, timely sign-off" }
+  ],
+  "assumptions": [
+    "Acme provides admin access to the current platform by kick-off",
+    "Source data volume does not exceed 2 TB"
+  ],
+  "acceptance_criteria": "Acme reviews each deliverable within five business days of handover.\nA deliverable is accepted on written sign-off or when the review window passes without written objection.",
+  "currency": "USD",
+  "pricing_model": "fixed_price",
+  "fees": [
+    { "item": "Assessment and design", "amount": 18000 },
+    { "item": "Migration and cut-over", "amount": 42000 },
+    { "item": "Hypercare", "amount": 6000 }
+  ],
+  "payment_schedule": [
+    { "milestone": "Contract signature", "due": "2026-10-26", "amount": 19800 },
+    { "milestone": "Design sign-off", "due": "2026-11-27", "amount": 19800 },
+    { "milestone": "Go-live", "due": "2027-01-29", "amount": 26400 }
+  ],
+  "payment_terms": "Net 30 from invoice date",
+  "governing_law": "the Republic of Singapore",
+  "_sources": {
+    "client_name": "rfp",
+    "vendor_signatory_name": "default",
+    "fees": "user"
+  }
+}
