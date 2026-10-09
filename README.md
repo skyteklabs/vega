@@ -111,7 +111,7 @@ Options: `minAnswerChars` (default `80`) and `suggestSkills` (default `true`). S
 plugins/
   model-router/
     .claude-plugin/plugin.json    plugin manifest and userConfig schema
-    hooks/                        hook module (model-router.ts) and policy (policy.ts)
+    hooks/                        hook module (register.tsx) and policy (policy.ts)
     tests/                        policy and router tests
   flightdeck/
     .claude-plugin/plugin.json    plugin manifest and userConfig schema
