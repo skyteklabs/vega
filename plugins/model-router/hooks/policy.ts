@@ -218,6 +218,35 @@ function confidenceOf(answer: Record<string, unknown>): number | null {
   return values.length > 0 ? Math.max(...values) : null
 }
 
+/**
+ * The effort rubric as the built-in classifier is asked it. `$.model.classify`
+ * takes labels and nothing else, so each one carries the question itself; a
+ * bare "a lot" could as well be read as the size of the change.
+ */
+export const BUILTIN_EFFORT_LABELS = [
+  'needs almost no reasoning',
+  'needs some reasoning',
+  'needs a lot of reasoning',
+  'needs as much reasoning as possible',
+] as const
+
+/**
+ * The highest reasoning level an effort reported without a confidence may
+ * raise a turn to. Such an upgrade skips the threshold, and past `high` an
+ * unmeasured hunch would cost more than it is worth.
+ */
+const UNMEASURED_MAX_EFFORT = EFFORT_ORDER.indexOf('high')
+
+/**
+ * A label picked by the built-in classifier as the rubric score (0..3) a
+ * backend would have sent, or null when the label is not one of
+ * BUILTIN_EFFORT_LABELS. Uncapped: this is the answer, before any policy.
+ */
+export function rubricScore(label: string | undefined): number | null {
+  const index = BUILTIN_EFFORT_LABELS.indexOf(label as (typeof BUILTIN_EFFORT_LABELS)[number])
+  return index === -1 ? null : index
+}
+
 /** The rubric score (0..3) as a reasoning level. */
 export function effortLevel(score: number): Effort {
   const index = Math.min(EFFORT_ORDER.length - 1, Math.max(0, Math.round(score)))
@@ -363,6 +392,10 @@ export function route(
       : null
 
   let effort: Effort | null = null
+  // What the policy would ask for, after risk and the unmeasured cap: the
+  // `kept` line names this, not the raw score, so a cap does not read as a
+  // refused upgrade.
+  let wantedEffort: Effort | null = null
   if (effortScore !== null) {
     const currentRank = effortRank(current.effort)
     let wantedRank = EFFORT_ORDER.indexOf(effortLevel(effortScore))
@@ -372,10 +405,16 @@ export function route(
     // and rated mechanically simple would be pulled down to `high` with no
     // confidence check at all — the opposite of what the rule is for.
     if (forced && currentRank !== null) wantedRank = Math.max(wantedRank, currentRank)
+    // An effort with no confidence behind it may only rise, and not past
+    // `high`; a wanted `xhigh` over a current `high` is then no change at all.
+    if (!forced && decision.effortConfidence === null) {
+      wantedRank = Math.min(wantedRank, UNMEASURED_MAX_EFFORT)
+    }
 
     // A numeric effort is the caller's own scale, not this ladder; leave it.
     const comparable = typeof current.effort !== 'number'
     const wanted = EFFORT_ORDER[Math.min(EFFORT_ORDER.length - 1, wantedRank)] as Effort
+    wantedEffort = wanted
     if (
       comparable &&
       wantedRank !== currentRank &&
@@ -391,7 +430,6 @@ export function route(
     // Naming what it wanted and what it kept is the whole point of this line.
     // Without it, a mod that classified and decided to leave the request alone
     // is indistinguishable from one that never loaded.
-    const wantedEffort = effortScore === null ? null : effortLevel(effortScore)
     const kept = `${current.model}${current.effort === undefined ? '' : `/${current.effort}`}`
     const wanted = `${wantedModel}${wantedEffort ? `/${wantedEffort}` : ''}`
     return { model: null, effort: null, reason: `kept ${kept}, wanted ${wanted} (${said})` }

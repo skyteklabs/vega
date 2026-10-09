@@ -14,7 +14,7 @@
  * Three things it can set, each on its own switch:
  *   agent.spawn  — the model of each subagent (on by default)
  *   turn.step    — the reasoning effort of the main loop (on by default)
- *   turn.step    — the model of the main loop (off by default: switching
+ *   turn.step    — the model of the main loop (on by default; switching
  *                  models mid-session invalidates the prompt cache, which can
  *                  cost more than the cheaper tier saves)
  *
@@ -57,10 +57,23 @@ import {
   requestHeaders,
   requestModelId,
   route,
+  rubricScore,
+  BUILTIN_EFFORT_LABELS,
   TIER_ORDER,
   bareCommand,
 } from './policy.ts'
 import type { Decision, Effort, PolicyConfig, Provider, Tier } from './policy.ts'
+
+/**
+ * What a built-in classification resolves to when it is still out at its
+ * deadline: a sentinel, since `$.model.classify` itself may resolve undefined.
+ */
+const TIMED_OUT = Symbol('timed out')
+
+/** `work`, or TIMED_OUT if `deadline` comes first. */
+function within<T>(work: Promise<T>, deadline: Promise<void>): Promise<T | typeof TIMED_OUT> {
+  return Promise.race([work, deadline.then(() => TIMED_OUT)])
+}
 
 export const register: Register = (on, options) => {
   const text = (key: string, fallback: string) =>
@@ -195,20 +208,45 @@ export const register: Register = (on, options) => {
       }
     } else {
       // No backend: the engine's own small-model classifier answers the same
-      // question, without the confidence the policy's threshold reads.
-      try {
-        const label = await $.model.classify(e.text, TIER_ORDER)
-        if (label) {
-          decision = {
-            tier: label as Tier,
-            confidence: null,
-            risky: null,
-            effort: null,
-            effortConfidence: null,
-          }
+      // questions, without the confidence the policy's threshold reads. The
+      // effort is asked separately, on the backend's rubric reworded to carry
+      // its own question, so a failure there still leaves the tier.
+      // The same latency budget as a backend, one deadline for both calls but
+      // each raced on its own: an effort answer still out at the deadline
+      // costs only the effort, never a tier that already came back.
+      const deadline = $.clock.sleep(timeoutMs)
+      let pastDeadline = false
+      // A sleep still pending when the plugin unloads rejects; nothing to do then.
+      deadline.then(
+        () => {
+          pastDeadline = true
+        },
+        () => {},
+      )
+      // A call that fails after the deadline was already given up on; saying
+      // so then would land in the log after the turn has moved on.
+      const classify = (labels: readonly string[]) =>
+        $.model.classify(e.text, labels).catch((error: unknown) => {
+          if (!pastDeadline) $.ui.log(`[model-router] built-in classifier failed: ${String(error)}`)
+          return undefined
+        })
+      const [label, effortLabel] = await Promise.all([
+        within(classify(TIER_ORDER), deadline),
+        routeMainEffort ? within(classify(BUILTIN_EFFORT_LABELS), deadline) : undefined,
+      ])
+      if (label === TIMED_OUT) {
+        $.ui.log(`[model-router] classification passed ${timeoutMs}ms; leaving the turn alone`)
+      } else if (label) {
+        if (effortLabel === TIMED_OUT) {
+          $.ui.log(`[model-router] effort classification passed ${timeoutMs}ms; routing the tier alone`)
         }
-      } catch (error) {
-        $.ui.log(`[model-router] built-in classifier failed: ${String(error)}`)
+        decision = {
+          tier: label as Tier,
+          confidence: null,
+          risky: null,
+          effort: effortLabel === TIMED_OUT ? null : rubricScore(effortLabel),
+          effortConfidence: null,
+        }
       }
     }
 
@@ -317,8 +355,11 @@ export const register: Register = (on, options) => {
       }
     } else {
       try {
-        const label = await $.model.classify(e.prompt, TIER_ORDER)
-        if (label) {
+        // The same latency budget as a backend: past it, the subagent is left alone.
+        const label = await within($.model.classify(e.prompt, TIER_ORDER), $.clock.sleep(timeoutMs))
+        if (label === TIMED_OUT) {
+          $.ui.log(`[model-router] classification passed ${timeoutMs}ms; leaving the subagent alone`)
+        } else if (label) {
           decision = {
             tier: label as Tier,
             confidence: null,

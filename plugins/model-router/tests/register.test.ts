@@ -33,6 +33,16 @@ function capturedAuthorization(on: Parameters<typeof mock.env>[0]) {
   return () => authorization
 }
 
+/** Collects every line the router writes with `$.ui.log`. */
+function capturedLog(on: Parameters<typeof mock.env>[0]) {
+  const lines: string[] = []
+  on('ui.log', async (_$, e, _next) => {
+    lines.push(e.text)
+    return { value: undefined }
+  })
+  return lines
+}
+
 test(
   'TYPESAFE_API_KEY is used when options.typesafeApiKey is unset',
   { options: { provider: 'typesafe' } },
@@ -94,5 +104,156 @@ test(
     const authorization = capturedAuthorization(on)
     await $.agent.spawn(spawn)
     expect(authorization()).toBe('Bearer options-key')
+  },
+)
+
+// With no key, the built-in classifier is asked the effort rubric beside the
+// tier, so the main loop's effort has a score to route on, capped at high.
+test(
+  'the built-in classifier routes the main loop effort, capped at high',
+  { options: { provider: 'builtin' } },
+  async ($, on) => {
+    mock.env(on, {})
+    mock.clock(on)
+    on('model.classify', async (_$, e, _next) => ({
+      value: e.labels.includes('deep') ? 'deep' : 'needs as much reasoning as possible',
+    }))
+    on('prompt.submit', async (_$, e, _next) => e)
+    let sent: string | number | undefined
+    on('turn.step', async function* (_$, e, _next) {
+      sent = e.effort
+      return { turnId: e.turnId, index: e.index, answer: '', toolUses: [] } as never
+    })
+    await $.prompt.submit(prompt)
+    const stream = $.turn.step({ turnId: 'turn-1', index: 0, model: 'claude-opus-5', effort: 'medium', messageCount: 1 })
+    for await (const _chunk of stream) {
+      // drained only so the result settles
+    }
+    await stream.result
+    expect(sent).toBe('high')
+  },
+)
+
+// A classifier still out at timeoutMs leaves the turn as the engine built it.
+test(
+  'a built-in classification past timeoutMs leaves the turn alone',
+  { options: { provider: 'builtin', timeoutMs: 800 } },
+  async ($, on) => {
+    mock.env(on, {})
+    const clock = mock.clock(on)
+    on('model.classify', async (_$, _e, _next) => new Promise(() => {}))
+    on('prompt.submit', async (_$, e, _next) => e)
+    const lines = capturedLog(on)
+    let sent: string | number | undefined
+    on('turn.step', async function* (_$, e, _next) {
+      sent = e.effort
+      return { turnId: e.turnId, index: e.index, answer: '', toolUses: [] } as never
+    })
+    const submitted = $.prompt.submit(prompt)
+    await clock.advance(800)
+    await submitted
+    const stream = $.turn.step({ turnId: 'turn-1', index: 0, model: 'claude-opus-5', effort: 'medium', messageCount: 1 })
+    for await (const _chunk of stream) {
+      // drained only so the result settles
+    }
+    await stream.result
+    expect(sent).toBe('medium')
+    expect(lines.some((line) => line.includes('passed 800ms; leaving the turn alone'))).toBe(true)
+  },
+)
+
+// The effort is raced on its own: a tier that came back in time is still
+// routed when only the effort question is out at timeoutMs.
+test(
+  'a built-in effort past timeoutMs still routes the tier',
+  { options: { provider: 'builtin', timeoutMs: 800 } },
+  async ($, on) => {
+    mock.env(on, {})
+    const clock = mock.clock(on)
+    on('model.classify', async (_$, e, _next) =>
+      e.labels.includes('deep') ? { value: 'deep' } : new Promise(() => {}),
+    )
+    on('prompt.submit', async (_$, e, _next) => e)
+    const lines = capturedLog(on)
+    let sent: { model: string; effort?: string | number } | undefined
+    on('turn.step', async function* (_$, e, _next) {
+      sent = { model: e.model, effort: e.effort }
+      return { turnId: e.turnId, index: e.index, answer: '', toolUses: [] } as never
+    })
+    const submitted = $.prompt.submit(prompt)
+    await clock.advance(800)
+    await submitted
+    const stream = $.turn.step({ turnId: 'turn-1', index: 0, model: 'haiku', effort: 'medium', messageCount: 1 })
+    for await (const _chunk of stream) {
+      // drained only so the result settles
+    }
+    await stream.result
+    expect(sent?.model).not.toBe('haiku')
+    expect(sent?.effort).toBe('medium')
+    expect(lines.some((line) => line.includes('leaving the turn alone'))).toBe(false)
+    expect(lines.some((line) => line.includes('effort classification passed 800ms'))).toBe(true)
+  },
+)
+
+test(
+  'the built-in classifier skips the effort question when effort routing is off',
+  { options: { provider: 'builtin', routeMainEffort: false } },
+  async ($, on) => {
+    mock.env(on, {})
+    mock.clock(on)
+    const asked: (readonly string[])[] = []
+    on('model.classify', async (_$, e, _next) => {
+      asked.push(e.labels)
+      return { value: 'deep' }
+    })
+    on('prompt.submit', async (_$, e, _next) => e)
+    await $.prompt.submit(prompt)
+    expect(asked.length).toBe(1)
+  },
+)
+
+// The subagent path keeps the same budget: a classifier still out at
+// timeoutMs leaves the subagent on the model it would have run on.
+test(
+  'a built-in classification past timeoutMs leaves the subagent alone',
+  { options: { provider: 'builtin', timeoutMs: 800 } },
+  async ($, on) => {
+    mock.env(on, {})
+    const clock = mock.clock(on)
+    on('model.classify', async (_$, _e, _next) => new Promise(() => {}))
+    const lines = capturedLog(on)
+    let spawnedWith: string | undefined
+    on('agent.spawn', async (_$, e, _next) => {
+      spawnedWith = e.model ?? e.parentModel
+      return { model: spawnedWith }
+    })
+    const spawned = $.agent.spawn(spawn)
+    await clock.advance(800)
+    await spawned
+    expect(spawnedWith).toBe('claude-opus-5')
+    expect(lines.some((line) => line.includes('passed 800ms; leaving the subagent alone'))).toBe(true)
+  },
+)
+
+// A call given up on at the deadline that fails later is not reported: the
+// turn has already moved on, and the timeout line said what happened.
+test(
+  'a built-in classifier failing after timeoutMs is not logged',
+  { options: { provider: 'builtin', timeoutMs: 800 } },
+  async ($, on) => {
+    mock.env(on, {})
+    const clock = mock.clock(on)
+    on('model.classify', async (_$, _e, _next) => {
+      await clock.sleep(1000)
+      throw new Error('late')
+    })
+    on('prompt.submit', async (_$, e, _next) => e)
+    const lines = capturedLog(on)
+    const submitted = $.prompt.submit(prompt)
+    await clock.advance(800)
+    await submitted
+    await clock.advance(400)
+    expect(lines.some((line) => line.includes('leaving the turn alone'))).toBe(true)
+    expect(lines.some((line) => line.includes('built-in classifier failed'))).toBe(false)
   },
 )

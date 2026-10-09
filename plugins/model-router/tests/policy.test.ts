@@ -14,6 +14,7 @@ import {
   requestHeaders,
   requestModelId,
   route,
+  rubricScore,
   selectProvider,
   bareCommand,
 } from '../hooks/policy.ts'
@@ -400,4 +401,41 @@ test('a slash command alone is not a task; with text after it, it is', () => {
   for (const text of ['/simplify', ' /run ', '/code-review\n']) expect(bareCommand(text)).toBe(true)
   for (const text of ['/code-review high', '/simplify the retry loop', '/tmp/log.txt', '/', 'fix /api', 'rename foo'])
     expect(bareCommand(text)).toBe(false)
+})
+
+test('a built-in effort label reads as its raw score', () => {
+  expect(rubricScore('needs almost no reasoning')).toBe(0)
+  expect(rubricScore('needs a lot of reasoning')).toBe(2)
+  expect(rubricScore('needs as much reasoning as possible')).toBe(3)
+  expect(rubricScore('a lot')).toBeNull()
+  expect(rubricScore(undefined)).toBeNull()
+})
+
+const unmeasured = (effort: number, risky: number | null = null): Decision => ({
+  tier: 'deep',
+  confidence: null,
+  risky,
+  effort,
+  effortConfidence: null,
+})
+
+test('an effort with no confidence may raise effort but never lower it', () => {
+  expect(route(unmeasured(2), { model: 'opus', effort: 'medium' }, config).effort).toBe('high')
+  expect(route(unmeasured(0), { model: 'opus', effort: 'medium' }, config).effort).toBeNull()
+})
+
+test('an effort with no confidence raises a turn no higher than high', () => {
+  expect(route(unmeasured(3), { model: 'opus', effort: 'medium' }, config).effort).toBe('high')
+  expect(route(unmeasured(3), { model: 'opus', effort: 'high' }, config).effort).toBeNull()
+  expect(route(unmeasured(3), { model: 'opus', effort: 'xhigh' }, config).effort).toBeNull()
+})
+
+test('the high cap does not apply to an effort forced by risk', () => {
+  expect(route(unmeasured(3, 0.9), { model: 'opus', effort: 'medium' }, config).effort).toBe('xhigh')
+})
+
+test('a no-change held by the high cap names the capped effort, not the raw one', () => {
+  expect(route(unmeasured(3), { model: 'opus', effort: 'high' }, config).reason).toBe(
+    'kept opus/high, wanted opus/high (confidence n/d)',
+  )
 })

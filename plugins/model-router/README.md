@@ -46,7 +46,7 @@ The two mistakes do not cost the same, so they do not clear the same bar:
 - Spending **more** (a bigger model, more reasoning) needs `minUpgradeConfidence`, 0.3 by default. Being wrong costs money.
 - Spending **less** needs `minDowngradeConfidence`, 0.6 by default. Being wrong means a task handled by too small a model or too little thought.
 - `risky` above 0.7 takes the deep tier and real reasoning, past both bars. That one is not a confidence question.
-- A backend that reports no confidence at all — the Gateway without a distribution, or the built-in classifier — may only move a request **up**. Spending less on an unmeasured hunch is the bad trade.
+- A backend that reports no confidence at all — the Gateway without a distribution, or the built-in classifier — may only move a request **up**, and its effort no higher than `high`. Spending less on an unmeasured hunch is the bad trade, and spending past `high` on one costs more than it is worth. Effort forced by risk is not capped.
 - A model id matching no tier, or a numeric effort (the caller's own scale), has no knowable direction: the model gets the gentler upgrade bar, and a numeric effort is left alone.
 
 Every other failure — a non-2xx response, a timeout, a malformed body, a thrown error — leaves the request exactly as the engine built it. The router never blocks a turn.
