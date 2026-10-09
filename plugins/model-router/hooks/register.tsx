@@ -331,8 +331,16 @@ export const register: Register = (on, options) => {
       }
     } else {
       try {
-        const label = await $.model.classify(e.prompt, TIER_ORDER)
-        if (label) {
+        // The same latency budget as a backend: past it, the subagent is left alone.
+        // A sentinel, since `classify` itself may resolve undefined.
+        const timedOut = Symbol('timed out')
+        const label = await Promise.race([
+          $.model.classify(e.prompt, TIER_ORDER),
+          $.clock.sleep(timeoutMs).then(() => timedOut),
+        ])
+        if (label === timedOut) {
+          $.ui.log(`[model-router] classification passed ${timeoutMs}ms; leaving the subagent alone`)
+        } else if (label) {
           decision = {
             tier: label as Tier,
             confidence: null,

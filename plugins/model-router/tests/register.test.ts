@@ -166,3 +166,24 @@ test(
     expect(asked.length).toBe(1)
   },
 )
+
+// The subagent path keeps the same budget: a classifier still out at
+// timeoutMs leaves the subagent on the model it would have run on.
+test(
+  'a built-in classification past timeoutMs leaves the subagent alone',
+  { options: { provider: 'builtin', timeoutMs: 800 } },
+  async ($, on) => {
+    mock.env(on, {})
+    const clock = mock.clock(on)
+    on('model.classify', async (_$, _e, _next) => new Promise(() => {}))
+    let spawnedWith: string | undefined
+    on('agent.spawn', async (_$, e, _next) => {
+      spawnedWith = e.model ?? e.parentModel
+      return { model: spawnedWith }
+    })
+    const spawned = $.agent.spawn(spawn)
+    await clock.advance(800)
+    await spawned
+    expect(spawnedWith).toBe('claude-opus-5')
+  },
+)
