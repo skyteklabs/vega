@@ -100,25 +100,53 @@ test(
 // With no key, the built-in classifier is asked the effort rubric beside the
 // tier, so the main loop's effort has a score to route on, capped at high.
 test(
-  'the built-in classifier reports an effort score',
+  'the built-in classifier routes the main loop effort, capped at high',
   { options: { provider: 'builtin' } },
   async ($, on) => {
     mock.env(on, {})
     mock.clock(on)
-    const asked: (readonly string[])[] = []
-    on('model.classify', async (_$, e, _next) => {
-      asked.push(e.labels)
-      return { value: e.labels.includes('deep') ? 'deep' : 'needs as much reasoning as possible' }
-    })
-    const lines: string[] = []
-    on('ui.log', async (_$, e, _next) => {
-      lines.push(e.text)
-      return { value: undefined }
-    })
+    on('model.classify', async (_$, e, _next) => ({
+      value: e.labels.includes('deep') ? 'deep' : 'needs as much reasoning as possible',
+    }))
     on('prompt.submit', async (_$, e, _next) => e)
+    let sent: string | number | undefined
+    on('turn.step', async function* (_$, e, _next) {
+      sent = e.effort
+      return { turnId: e.turnId, index: e.index, answer: '', toolUses: [] } as never
+    })
     await $.prompt.submit(prompt)
-    expect(asked.length).toBe(2)
-    expect(lines.some((line) => line.includes('effort 2.0 → high'))).toBe(true)
+    const stream = $.turn.step({ turnId: 'turn-1', index: 0, model: 'claude-opus-5', effort: 'medium', messageCount: 1 })
+    for await (const _chunk of stream) {
+      // drained only so the result settles
+    }
+    await stream.result
+    expect(sent).toBe('high')
+  },
+)
+
+// A classifier still out at timeoutMs leaves the turn as the engine built it.
+test(
+  'a built-in classification past timeoutMs leaves the turn alone',
+  { options: { provider: 'builtin', timeoutMs: 800 } },
+  async ($, on) => {
+    mock.env(on, {})
+    const clock = mock.clock(on)
+    on('model.classify', async (_$, _e, _next) => new Promise(() => {}))
+    on('prompt.submit', async (_$, e, _next) => e)
+    let sent: string | number | undefined
+    on('turn.step', async function* (_$, e, _next) {
+      sent = e.effort
+      return { turnId: e.turnId, index: e.index, answer: '', toolUses: [] } as never
+    })
+    const submitted = $.prompt.submit(prompt)
+    await clock.advance(800)
+    await submitted
+    const stream = $.turn.step({ turnId: 'turn-1', index: 0, model: 'claude-opus-5', effort: 'medium', messageCount: 1 })
+    for await (const _chunk of stream) {
+      // drained only so the result settles
+    }
+    await stream.result
+    expect(sent).toBe('medium')
   },
 )
 

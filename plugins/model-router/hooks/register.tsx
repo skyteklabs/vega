@@ -205,10 +205,16 @@ export const register: Register = (on, options) => {
           $.ui.log(`[model-router] built-in classifier failed: ${String(error)}`)
           return undefined
         })
-      const [label, effortLabel] = await Promise.all([
-        classify(TIER_ORDER),
-        routeMainEffort ? classify(BUILTIN_EFFORT_LABELS) : undefined,
+      // The same latency budget as a backend: past it, the turn is left alone.
+      const answers = await Promise.race([
+        Promise.all([
+          classify(TIER_ORDER),
+          routeMainEffort ? classify(BUILTIN_EFFORT_LABELS) : undefined,
+        ]),
+        $.clock.sleep(timeoutMs),
       ])
+      if (!answers) $.ui.log(`[model-router] classification passed ${timeoutMs}ms; leaving the turn alone`)
+      const [label, effortLabel] = answers ?? []
       if (label) {
         decision = {
           tier: label as Tier,
