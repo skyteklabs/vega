@@ -34,6 +34,10 @@ let sparkSize = 0
 let bandId: string | null = null
 let demoStartedAt = 0
 let demoFired: number[] = []
+let demoRamp: { cancel: () => void } | null = null
+let demoHold: { cancel: () => void } | null = null
+// The session's own timers, cancelled when another session starts in this process.
+let sessionTimers: Array<{ cancel: () => void }> = []
 let paneTimer: { cancel: () => void } | null = null
 let paneSize = ''
 // The options, read once at register.
@@ -59,6 +63,10 @@ const startPaneFire = ($: EngineInterface, columns: number) => {
   if (paneTimer && paneSize === size) return
   paneTimer?.cancel()
   paneSize = size
+  const stopPane = () => {
+    timer.cancel()
+    if (paneTimer === timer) paneTimer = null
+  }
   const timer = $.clock.every(70, () => {
     void Promise.all([read($, burn), $.clock.now()]).then(([b, now]) =>
       $.ui
@@ -67,12 +75,9 @@ const startPaneFire = ($: EngineInterface, columns: number) => {
           key: 'bigfire',
           cells: fireCells(columns, fill(b), fill(b), now / 1000, PANE_FIRE_ROWS),
         })
-        .then(r => {
-          if (r.deny && paneTimer === timer) {
-            timer.cancel()
-            paneTimer = null
-          }
-        }),
+        .then(r => r.deny && stopPane())
+        // A rejected blit is a refusal too: stop rather than fail every frame.
+        .catch(stopPane),
     )
   })
   paneTimer = timer
@@ -248,6 +253,10 @@ const startSpark = ($: EngineInterface, columns: number) => {
   if (sparkTimer && sparkSize === columns) return
   sparkTimer?.cancel()
   sparkSize = columns
+  const stopSpark = () => {
+    timer.cancel()
+    if (sparkTimer === timer) sparkTimer = null
+  }
   const timer = $.clock.every(80, () => {
     if (!bandId) return
     void Promise.all([read($, burn), $.clock.now()]).then(([b, now]) =>
@@ -257,23 +266,24 @@ const startSpark = ($: EngineInterface, columns: number) => {
           key: 'fire',
           cells: fireCells(columns, fill(b), fill(b), now / 1000),
         })
-        .then(r => {
-          if (r.deny && sparkTimer === timer) {
-            timer.cancel()
-            sparkTimer = null
-          }
-        }),
+        .then(r => r.deny && stopSpark())
+        .catch(stopSpark),
     )
   })
   sparkTimer = timer
 }
 
 const runDemo = async ($: EngineInterface) => {
+  // A demo started over a running one replaces it, ramp and hold alike.
+  demoRamp?.cancel()
+  demoHold?.cancel()
+  demoHold = null
   demoStartedAt = await $.clock.now()
   demoFired = []
   await update($, isHidden, () => false)
   await update($, burn, b => ({ ...b, shown: 0, target: 0, isDemo: true }))
   const ramp = $.clock.every(100, () => {
+    if (demoRamp !== ramp) return
     void $.clock.now().then(async now => {
       const t = Math.min(1, (now - demoStartedAt) / DEMO_MS)
       // Slow start, steep finish: how a long agent session actually feels.
@@ -282,14 +292,17 @@ const runDemo = async ($: EngineInterface) => {
       await alarm($, before, target, true)
       await update($, burn, b => ({ ...b, target }))
       startTween($)
-      if (t >= 1) {
+      if (t >= 1 && demoRamp === ramp) {
         ramp.cancel()
-        $.clock.after(DEMO_HOLD_MS, () => {
+        demoRamp = null
+        demoHold = $.clock.after(DEMO_HOLD_MS, () => {
+          demoHold = null
           void update($, burn, b => ({ ...b, isDemo: false, shown: 0, target: 0 })).then(() => syncCost($))
         })
       }
     })
   })
+  demoRamp = ramp
 }
 
 export const register: Register = (on, options) => {
@@ -301,10 +314,16 @@ export const register: Register = (on, options) => {
       name: 'burn',
       description: cfg.text.command,
     })
+    // A new session in this process (after /clear, say) fetches its own rate
+    // and replaces the last one's timers rather than running beside them.
+    isRateLoaded = false
+    for (const timer of sessionTimers) timer.cancel()
     void syncCost($)
-    $.clock.every(1000, () => void syncCost($))
-    // The comparison rotates every six seconds even while the spend sits still.
-    $.clock.every(6000, () => $.ui.invalidate('ui.render'))
+    sessionTimers = [
+      $.clock.every(1000, () => void syncCost($)),
+      // The comparison rotates every six seconds even while the spend sits still.
+      $.clock.every(6000, () => $.ui.invalidate('ui.render')),
+    ]
 
     return next(e)
   })
@@ -341,7 +360,8 @@ export const register: Register = (on, options) => {
     }
     const b = await read($, burn)
     if (arg === 'lifetime') {
-      return { text: cfg.text.lifetimeLine(cash(b.lifetime), thatIs(b.lifetime, 2)) }
+      const which = Math.floor((await $.clock.now()) / 6000) % cfg.things.length
+      return { text: cfg.text.lifetimeLine(cash(b.lifetime), thatIs(b.lifetime, which)) }
     }
     await update($, isHidden, () => false)
     if (arg === '' || arg === 'panel') void openPane($)
@@ -367,8 +387,8 @@ export const register: Register = (on, options) => {
     const bar = Math.max(12, Math.min(64, cols - 46))
     const used = modelsLine(await read($, models), cols >= 140 ? 2 : 1)
     const which = Math.floor(now / 6000) % cfg.things.length
-    const sessionLine = `${cfg.text.fiveHourShort} ${pct(b.session)} ${resetsIn(b.sessionResets, Date.now(), cfg.lang)}`.trim()
-    const weekLine = `${cfg.text.weekShort} ${pct(b.week)} ${resetsIn(b.weekResets, Date.now(), cfg.lang)}`.trim()
+    const sessionLine = `${cfg.text.fiveHourShort} ${pct(b.session)} ${resetsIn(b.sessionResets, now, cfg.lang)}`.trim()
+    const weekLine = `${cfg.text.weekShort} ${pct(b.week)} ${resetsIn(b.weekResets, now, cfg.lang)}`.trim()
 
     if (hasFire) {
       bandId = e.requestId
@@ -448,7 +468,7 @@ export const register: Register = (on, options) => {
                 <Text dimColor>{cfg.text.fiveHour}</Text>
                 <Text color={b.session > 75 ? RED : GOLD}>{windowBar(b.session)}</Text>
                 <Text>{` ${pct(b.session)} `}</Text>
-                <Text dimColor>{resetsIn(b.sessionResets, Date.now(), cfg.lang)}</Text>
+                <Text dimColor>{resetsIn(b.sessionResets, now, cfg.lang)}</Text>
               </Text>
             )}
             {b.week >= 0 && (
@@ -456,7 +476,7 @@ export const register: Register = (on, options) => {
                 <Text dimColor>{cfg.text.weekly}</Text>
                 <Text color={b.week > 75 ? RED : GOLD}>{windowBar(b.week)}</Text>
                 <Text>{` ${pct(b.week)} `}</Text>
-                <Text dimColor>{resetsIn(b.weekResets, Date.now(), cfg.lang)}</Text>
+                <Text dimColor>{resetsIn(b.weekResets, now, cfg.lang)}</Text>
               </Text>
             )}
           </Box>

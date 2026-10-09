@@ -2,22 +2,32 @@ import type { On, SessionUsage } from 'claude-code'
 import type { Engine, MockClock } from 'claude-code/testing'
 import { expect, mock, test } from 'claude-code/testing'
 
-type World = { fetched: string[]; logs: string[]; toasts: string[]; usageReads: number }
+type World = { fetched: string[]; logs: string[]; toasts: string[]; usageReads: number; invalidations: number; sessionId: string }
 
 /** The engine beneath burner: the session costs `usd`, and the exchange-rate API answers `reply`. */
-function engine(on: On, opts: { usd: number; reply?: object; sessionId?: string; fetchThrows?: boolean; usageFails?: boolean }): World {
-  const w: World = { fetched: [], logs: [], toasts: [], usageReads: 0 }
+function engine(
+  on: On,
+  opts: { usd: number; reply?: object; sessionId?: string; fetchThrows?: boolean; usageFails?: boolean; rateLimits?: SessionUsage['rateLimits'] },
+): World {
+  const w: World = { fetched: [], logs: [], toasts: [], usageReads: 0, invalidations: 0, sessionId: opts.sessionId ?? 's1' }
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('command.register', () => ({ value: undefined }))
-  on('session.id', () => ({ value: opts.sessionId ?? 's1' }))
+  on('session.id', () => ({ value: w.sessionId }))
   on('turn.complete', (_$, e) => ({ text: e.answer }))
-  on('session.usage', () => (w.usageReads++, opts.usageFails) ? { deny: 'usage unavailable' } : ({ value: { startedAt: 0, context: {} as never, rateLimits: [], cost: { usd: opts.usd } } satisfies SessionUsage }))
+  on('session.usage', () => (w.usageReads++, opts.usageFails) ? { deny: 'usage unavailable' } : ({ value: { startedAt: 0, context: {} as never, rateLimits: opts.rateLimits ?? [], cost: { usd: opts.usd } } satisfies SessionUsage }))
   on('http.fetch', (_$, e) => {
     w.fetched.push(e.url)
     if (opts.fetchThrows) return { deny: `connect ECONNREFUSED while fetching ${e.url}` }
     const text = JSON.stringify(opts.reply ?? { result: 'error', 'error-type': 'invalid-key' })
     return { value: { status: 200, ok: true, headers: {}, text } }
   })
+  on('ui.invalidate', () => {
+    w.invalidations++
+    return { value: undefined }
+  })
+  on('ui.open', () => ({ value: undefined }) as never)
+  // What draws in the band when burner has nothing to show.
+  on('ui.render', { component: 'AbovePrompt' }, () => ({ type: 'Text' as const, props: {}, children: ['below'] }))
   on('ui.toast', (_$, e) => {
     w.toasts.push(String(e.text))
     return { value: undefined }
@@ -298,4 +308,77 @@ test('a held reading does not pile up a backlog from the timer', { options: { id
   store.release()
   await clock.settle()
   expect(w.usageReads - before).toBe(1)
+})
+
+const startAgain = ($: Engine) => $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+const burnCommand = ($: Engine, args: string) => $.command.run({ command: 'burn', args, origin: {} as never })
+
+test('a second session in the process replaces the first one\'s timers', { options: { language: 'en' } }, async ($, on) => {
+  const clock = mock.clock(on)
+  mock.store(on)
+  mock.env(on, {})
+  const w = engine(on, { usd: 1 })
+  await start($, clock)
+  w.sessionId = 's2'
+  await startAgain($)
+  await clock.settle()
+  const before = w.invalidations
+  await clock.advance(6000)
+  expect(w.invalidations - before).toBe(1)
+})
+
+test('a second session in the process fetches its own rate', { options: { exchangeRateApiKey: 'k1' } }, async ($, on) => {
+  const clock = mock.clock(on)
+  mock.store(on)
+  mock.env(on, {})
+  const w = engine(on, { usd: 1, reply: rate(16_000) })
+  await start($, clock)
+  expect(w.fetched).toHaveLength(1)
+  w.sessionId = 's2'
+  await startAgain($)
+  await clock.settle()
+  await clock.advance(1000)
+  expect(w.fetched).toHaveLength(2)
+})
+
+test('reset times count from the engine clock', async ($, on) => {
+  const now = Date.parse('2026-10-02T17:46:00Z')
+  const clock = mock.clock(on, { now })
+  mock.store(on)
+  mock.env(on, {})
+  engine(on, { usd: 1, rateLimits: [{ kind: 'five_hour', percentUsed: 42, resetsAt: '2026-10-02T20:03:00Z' } as SessionUsage['rateLimits'][number]] })
+  await start($, clock)
+  // Three seconds on from 17:46:00, the reset at 20:03 is 2h 16m away.
+  const ui = await $.ui.mount(band)
+  expect(await ui.find({ text: /5j 42% 2j 16m lagi/ })).toBeDefined()
+})
+
+test('a demo started during the last one\'s hold is not cut short by it', async ($, on) => {
+  const clock = mock.clock(on)
+  mock.store(on)
+  mock.env(on, {})
+  engine(on, { usd: 0 })
+  await start($, clock)
+  await burnCommand($, 'demo')
+  // The first ramp ends at 20s and holds until 26s; a second demo starts in that hold.
+  await clock.advance(22_000)
+  await burnCommand($, 'demo')
+  // Past the first hold's end: the second demo (22s to 42s, held to 48s) still shows.
+  await clock.advance(6_000)
+  const ui = await $.ui.mount(band)
+  expect(await ui.find({ text: /^DEMO$/ })).toBeDefined()
+  await clock.advance(21_000)
+  const after = await $.ui.mount(band)
+  expect(await after.find({ text: /^DEMO$/ })).toBeUndefined()
+})
+
+test('/burn lifetime rotates the comparison like the band', { options: { idrPerUsd: 20_000 } }, async ($, on) => {
+  const clock = mock.clock(on)
+  mock.store(on, { lifetime: 5 })
+  mock.env(on, {})
+  engine(on, { usd: 0 })
+  await start($, clock)
+  expect(String((await burnCommand($, 'lifetime')).text)).toContain('porsi nasi padang')
+  await clock.advance(6000)
+  expect(String((await burnCommand($, 'lifetime')).text)).toContain('mangkuk bakso')
 })
