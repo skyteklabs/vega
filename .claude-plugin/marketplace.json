@@ -1,7 +1,10 @@
 {
   "name": "skyteklabs",
   "owner": { "name": "SkyTek Labs" },
+  "description": "SkyTek Labs plugins for Claude Code: model and effort routing, a live agent dashboard, and next-prompt suggestions",
   "plugins": [
-    { "name": "model-router",  "source": "./plugins/model-router",  "description": "Router to optimize the model selections based on the type of the job/task working using jev" }
+    { "name": "model-router",  "source": "./plugins/model-router",  "description": "Router to optimize the model selections based on the type of the job/task working using jev" },
+    { "name": "flightdeck",    "source": "./plugins/flightdeck",    "description": "Live agent dashboard: main model vitals, on-call architect, permission checks, subagent cards and swimlanes, turn receipt and session log" },
+    { "name": "next-steps",    "source": "./plugins/next-steps",    "description": "Suggests up to three next prompts above the input after each turn; press 1, 2 or 3 to draft one, 0 to dismiss" }
   ]
 }
