@@ -1,0 +1,57 @@
+{
+  "name": "burner",
+  "version": "0.2.0",
+  "description": "Live session cost odometer above the prompt: a burning fuse, real-world comparisons, threshold alerts",
+  "types": "./types/index.d.ts",
+  "license": "MIT",
+  "author": {
+    "name": "SkyTek Labs"
+  },
+  "userConfig": {
+    "language": {
+      "type": "string",
+      "title": "Language",
+      "description": "Language of the band, the pane, the toasts and /burn: id (Bahasa Indonesia) or en (English)",
+      "options": [
+        "id",
+        "en"
+      ],
+      "default": "id"
+    },
+    "currency": {
+      "type": "string",
+      "title": "Currency",
+      "description": "What money shows in: idr (Rp), usd ($), or auto to follow the language. Display only: costs, thresholds and totals are counted in dollars",
+      "options": [
+        "auto",
+        "idr",
+        "usd"
+      ],
+      "default": "auto"
+    },
+    "comparisons": {
+      "type": "string",
+      "title": "Comparisons",
+      "description": "What the spend is compared to: us (burritos, McDoubles), id (nasi padang, bakso, es teh manis), or auto to follow the language",
+      "options": [
+        "auto",
+        "us",
+        "id"
+      ],
+      "default": "auto"
+    },
+    "exchangeRateApiKey": {
+      "type": "string",
+      "title": "ExchangeRate-API key",
+      "description": "Free key from exchangerate-api.com for the live rupiah rate (rupiah money and the Indonesian foods), fetched once per new session and cached; overrides idrPerUsd. Falls back to the EXCHANGERATE_API_KEY environment variable",
+      "default": "",
+      "sensitive": true
+    },
+    "idrPerUsd": {
+      "type": "number",
+      "title": "Rupiah per dollar",
+      "description": "Manual rupiah per dollar, for rupiah money and the Indonesian foods, when no ExchangeRate-API key is set",
+      "default": 16300
+    }
+  }
+}
