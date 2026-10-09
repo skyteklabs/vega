@@ -32,3 +32,11 @@ Suggestions draw in the terminal. Other surfaces show nothing.
 | --- | --- | --- |
 | `minAnswerChars` | `80` | Skip suggestions after answers shorter than this |
 | `suggestSkills` | `true` | Tell the suggester which skills and slash commands the session has |
+
+## Tests
+
+`tests/next-steps.test.ts` drives the hooks against a faked fork, command list and prompt box: the band on every surface, presses, dismiss, when no fork runs, stale replies, the command filter, and text cleaning.
+
+```sh
+claude plugin test .
+```

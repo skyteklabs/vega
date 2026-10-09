@@ -208,6 +208,7 @@ export const register: Register = (on, options) => {
         {items.map((item, index) => (
           <Box key={`s${index}`} marginLeft={2}>
             <Button
+              key={`pick-${index + 1}`}
               hotkey={String(index + 1)}
               plain
               label={item.label}
@@ -222,7 +223,7 @@ export const register: Register = (on, options) => {
           </Box>
         ))}
         <Box marginLeft={2}>
-          <Button hotkey="0" plain label="dismiss" onPress={() => show($, { kind: 'hidden' })} />
+          <Button key="dismiss" hotkey="0" plain label="dismiss" onPress={() => show($, { kind: 'hidden' })} />
         </Box>
       </Box>
     )
