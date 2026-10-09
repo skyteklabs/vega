@@ -1,6 +1,6 @@
-"""End-to-end checks for the skytek-create-sow scripts.
+"""End-to-end checks for the create-sow scripts.
 
-    uv run --with pytest pytest plugins/skytek-sow/tests
+    uv run --with pytest pytest plugins/skytek/tests
 
 Each script runs through `uv run`, as the skill runs it, so the tests need
 only pytest; the scripts bring their own dependencies.
@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-SKILL = Path(__file__).resolve().parent.parent / "skills" / "skytek-create-sow"
+SKILL = Path(__file__).resolve().parent.parent / "skills" / "create-sow"
 SCRIPTS = SKILL / "scripts"
 SAMPLE = SKILL / "assets" / "sample.json"
 TEMPLATE = SKILL / "assets" / "sow-template.docx"

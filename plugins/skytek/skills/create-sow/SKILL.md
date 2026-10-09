@@ -1,5 +1,5 @@
 ---
-name: skytek-create-sow
+name: create-sow
 description: Write a SkyTek Scope of Work (SOW) as .docx and .pdf from the company template. Use when the user wants an SOW or scope of work drafted, wants an RFP turned into an SOW, or wants a saved .sow.json re-rendered.
 argument-hint: "[path-to-rfp | path-to.sow.json]"
 allowed-tools: Bash(uv run ${CLAUDE_SKILL_DIR}/scripts/*)

@@ -19,7 +19,7 @@ Then install a plugin from it:
 /plugin install flightdeck@skyteklabs
 /plugin install next-steps@skyteklabs
 /plugin install burner@skyteklabs
-/plugin install skytek-sow@skyteklabs
+/plugin install skytek@skyteklabs
 ```
 
 Pick a scope when asked (user scope loads the plugin in every session). Run `/plugin` to browse, enable, disable, or update installed plugins.
@@ -38,9 +38,9 @@ claude --plugin-dir ./plugins/model-router
 | [`flightdeck`](plugins/flightdeck) | 0.1.0 | Live agent dashboard: main-model vitals, on-call architect, permission checks, subagent cards and swimlanes, turn receipt, session log |
 | [`next-steps`](plugins/next-steps) | 1.0.0 | Suggests up to three next prompts above the input after each turn; press `1`–`3` to draft one |
 | [`burner`](plugins/burner) | 0.2.0 | Live session cost odometer above the prompt: a burning fuse, real-world comparisons, threshold alerts |
-| [`skytek-sow`](plugins/skytek-sow) | 0.1.0 | Writes a Scope of Work from an RFP or an interview, as `.docx` and `.pdf` from one Word template |
+| [`skytek`](plugins/skytek) | 0.1.0 | Writes a Scope of Work from an RFP or an interview, as `.docx` and `.pdf` from one Word template |
 
-The first four are function-hooks plugins (mods): a `hooks/hooks.json` points at a TypeScript module that Claude Code loads directly, with no build step and no `node_modules`. `skytek-sow` is a skill plugin: a `SKILL.md` plus Python scripts run with `uv`.
+The first four are function-hooks plugins (mods): a `hooks/hooks.json` points at a TypeScript module that Claude Code loads directly, with no build step and no `node_modules`. `skytek` is a skill plugin: a `SKILL.md` plus Python scripts run with `uv`.
 
 ### model-router
 
@@ -116,21 +116,21 @@ A cost odometer above the prompt, read from `$.session.usage()` every second. Th
 
 Options: `language` (`id` for Bahasa Indonesia or `en`, default `id`), `currency` (`idr` for Rp or `usd`, default `auto` to follow the language; display only, the math stays in dollars) and `comparisons` (`us` for burritos and McDoubles, `id` for nasi padang, bakso and es teh manis, default `auto` to follow the language). The rupiah rate is `idrPerUsd` (default `16300`), or, with an `exchangeRateApiKey` from the free [exchangerate-api.com](https://www.exchangerate-api.com) plan, the live rate, fetched once per new session and cached. See the [plugin README](plugins/burner/README.md).
 
-### skytek-sow
+### skytek
 
-The `skytek-create-sow` skill turns an RFP into a Scope of Work:
+The `create-sow` skill turns an RFP into a Scope of Work:
 - **Input:** a PDF, docx, txt or md RFP, or nothing, in which case it interviews you for every field.
 - **Gaps:** it asks only for what the RFP leaves open, and never guesses pricing, payment or legal terms.
 - **Review:** it shows every value for your approval before writing anything.
 - **Output:** it fills one docxtpl Word template and writes `.docx`, `.pdf` and a `.sow.json` you can edit and re-render.
 
 ```sh
-/skytek-sow:skytek-create-sow ~/Downloads/acme-rfp.pdf
+/skytek:create-sow ~/Downloads/acme-rfp.pdf
 ```
 
 The PDF comes from LibreOffice (headless) or Microsoft Word. With neither installed you get the `.docx` and an offer to install LibreOffice. Requires [`uv`](https://docs.astral.sh/uv/).
 
-Options: `outputDir` (default `./sow`), `templatePath` (your own template), and the vendor defaults `vendorName`, `vendorAddress`, `vendorSignatoryName` and `vendorSignatoryTitle`. See the [plugin README](plugins/skytek-sow/README.md) for the template rules and the field list.
+Options: `outputDir` (default `./sow`), `templatePath` (your own template), and the vendor defaults `vendorName`, `vendorAddress`, `vendorSignatoryName` and `vendorSignatoryTitle`. See the [plugin README](plugins/skytek/README.md) for the template rules and the field list.
 
 ## Repository layout
 
@@ -155,10 +155,10 @@ plugins/
     hooks/                        register.tsx (hooks, band, pane), burn.ts (pure helpers)
     types/                        shared state types
     tests/                        helper and exchange-rate hook tests
-  skytek-sow/
+  skytek/
     .claude-plugin/plugin.json    plugin manifest and userConfig schema
-    skills/skytek-create-sow/     SKILL.md, scripts/ (render, extract, template builder), assets/ (template, schema, sample)
-    tests/                        pytest render tests (uv run --with pytest pytest plugins/skytek-sow/tests)
+    skills/create-sow/            SKILL.md, scripts/ (render, extract, template builder), assets/ (template, schema, sample)
+    tests/                        pytest render tests (uv run --with pytest pytest plugins/skytek/tests)
 ```
 
 ## Testing
@@ -169,7 +169,7 @@ From a plugin directory:
 claude plugin test .
 ```
 
-`skytek-sow` is Python: `uv run --with pytest pytest plugins/skytek-sow/tests`.
+`skytek` is Python: `uv run --with pytest pytest plugins/skytek/tests`.
 
 ## Adding a plugin
 

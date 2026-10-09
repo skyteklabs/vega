@@ -1,17 +1,17 @@
-# skytek-sow
+# skytek
 
 Writes a Scope of Work (SOW) from an RFP or a short interview, fills it into one Word template, and delivers it as `.docx` and `.pdf`.
 
 ```sh
-/plugin install skytek-sow --marketplace skyteklabs/vega
-/skytek-sow:skytek-create-sow ~/Downloads/acme-rfp.pdf
+/plugin install skytek --marketplace skyteklabs/vega
+/skytek:create-sow ~/Downloads/acme-rfp.pdf
 ```
 
 Claude also picks the skill up on its own when you ask for an SOW or hand it an RFP.
 
 ## How it works
 
-It is a skill plugin (`skills/skytek-create-sow/SKILL.md`), with no hooks:
+It is a skill plugin (`skills/create-sow/SKILL.md`), with no hooks:
 
 1. **Read the input.**
    - PDF, txt and md: read directly.
@@ -49,7 +49,7 @@ Template rules (docxtpl):
 After any template edit, check that its fields match the schema exactly:
 
 ```sh
-uv run skills/skytek-create-sow/scripts/render_sow.py --check-template [--template path.docx]
+uv run skills/create-sow/scripts/render_sow.py --check-template [--template path.docx]
 ```
 
 ### Fields
@@ -90,5 +90,5 @@ uv run skills/skytek-create-sow/scripts/render_sow.py --check-template [--templa
 PDF conversion is tested only when LibreOffice is installed.
 
 ```sh
-uv run --with pytest pytest plugins/skytek-sow/tests
+uv run --with pytest pytest plugins/skytek/tests
 ```

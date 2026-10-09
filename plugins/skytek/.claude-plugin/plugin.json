@@ -1,5 +1,5 @@
 {
-  "name": "skytek-sow",
+  "name": "skytek",
   "version": "0.1.0",
   "description": "Writes a Scope of Work from an RFP (docx, pdf, txt, md) or a short interview, filled into one Word template and delivered as .docx and .pdf",
   "author": {
