@@ -7,6 +7,7 @@ only pytest; the scripts bring their own dependencies.
 """
 
 import base64
+import importlib.util
 import json
 import shutil
 import subprocess
@@ -46,6 +47,15 @@ def docx_xml(path):
         )
 
 
+def _load_embed_fonts():
+    """embed_fonts.py declares no dependencies, so it's safe to import directly
+    rather than through `uv run` (unlike the scripts `run()` shells out to)."""
+    spec = importlib.util.spec_from_file_location("embed_fonts", SCRIPTS / "embed_fonts.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_template_matches_schema():
     result = run("render_sow.py", "--check-template")
     assert result.returncode == 0, result.stderr
@@ -57,6 +67,22 @@ def test_built_template_matches_schema(tmp_path):
     assert run("build_template.py", "--out", built).returncode == 0
     result = run("render_sow.py", "--check-template", "--template", built)
     assert result.returncode == 0, result.stderr
+
+
+def test_template_fonts_are_all_embeddable():
+    """Every TWK font name the template asks for must have a FONT_FILES entry in
+    embed_fonts.py, or it's silently skipped and Word/LibreOffice substitutes a
+    fallback font (this is exactly how the body text once fell back to a serif
+    font after a weight was renamed in build_template.py but not in FONT_FILES).
+
+    Non-TWK names (e.g. Courier, Symbol) are Word's own defaults, not ours to
+    embed, so only the "TWK ..." family names are checked.
+    """
+    embed_fonts = _load_embed_fonts()
+    names = {n for n in embed_fonts.used_font_names(TEMPLATE) if n.startswith("TWK ")}
+    assert names, "no TWK font names found in the template; is TEMPLATE stale?"
+    missing = sorted(names - embed_fonts.FONT_FILES.keys())
+    assert not missing, f"no FONT_FILES entry for: {missing}"
 
 
 def test_renders_sample(tmp_path):
