@@ -16,6 +16,8 @@ Then install a plugin from it:
 
 ```sh
 /plugin install model-router@skyteklabs
+/plugin install flightdeck@skyteklabs
+/plugin install next-steps@skyteklabs
 ```
 
 Pick a scope when asked (user scope loads the plugin in every session). Run `/plugin` to browse, enable, disable, or update installed plugins.
@@ -31,6 +33,10 @@ claude --plugin-dir ./plugins/model-router
 | Plugin | Version | Description |
 |---|---|---|
 | [`model-router`](plugins/model-router) | 0.1.0 | Picks the model and reasoning effort per task using Jev, TypeSafe's System One decision model |
+| [`flightdeck`](plugins/flightdeck) | 0.1.0 | Live agent dashboard: main-model vitals, on-call architect, permission checks, subagent cards and swimlanes, turn receipt, session log |
+| [`next-steps`](plugins/next-steps) | 1.0.0 | Suggests up to three next prompts above the input after each turn; press `1`–`3` to draft one |
+
+All three are function-hooks plugins (mods): a `hooks/hooks.json` points at a TypeScript module that Claude Code loads directly, with no build step and no `node_modules`.
 
 ### model-router
 
@@ -62,9 +68,41 @@ Changing the main loop's model mid-session invalidates the prompt cache. On long
 
 `typesafeApiKey` can also come from the `TYPESAFE_API_KEY` environment variable. Get a key at [console.typesafe.ai](https://console.typesafe.ai).
 
-**Requires** Claude Code 2.1.287+ (plugin hook modules on by default).
-
 See the [plugin README](plugins/model-router/README.md) for every option, the decision policy, transcript log lines, troubleshooting, and privacy details.
+
+### flightdeck
+
+A live dashboard pane fed only by real session events (`turn.step`, `tool.check`, `tool.call`, `agent.spawn`, `session.measure`, `session.compact`, …). Panels, in default order:
+
+| Panel | Shows |
+|---|---|
+| `main` | model, effort, permission mode, steps, context and cost gauges, rate limits |
+| `architect` | consults of the on-call architect (agent types or server tools matching `architectPattern`), with the inferred moment of each |
+| `gate` | every permission check, bucketed into file / shell / other, by rule, ask, cleared, deny |
+| `agents` | a card per subagent; more than `maxCards` switches to swimlanes |
+| `loops` | active loops |
+| `receipt` | last turn's duration, agents, and cost |
+| `log` | the last 60 session log lines |
+
+`/flightdeck [open|close|reset|layout auto|compact|wide|mini]` controls the pane. Focus it with `ctrl+x tab`; `1`–`6` expand cards, `f`/`s`/`o` open the gate rows. A status line shows context %, running agents, consults, and denials.
+
+Options (`/config`): `panels`, `layout`, `palette` (`theme` or `pastel`), `motion`, `maxCards`, `architectPattern`, `architectLabel`, `gateLabel`, `moments`, `matchDescriptions`, `openOnStart`, `statusLine`. See the [plugin README](plugins/flightdeck/README.md) for defaults, the architect's moments, and how it works.
+
+### next-steps
+
+After each turn, forks the session with `$.model.fork` (sharing the prompt cache, so about one short reply) to propose up to three next prompts, drawn above the input:
+
+```
+next:
+  1: run the tests you just wrote
+  2: do the same for the settings page
+  3: /code-review high
+  0: dismiss
+```
+
+Press `1`, `2` or `3` from an empty prompt box to write that prompt in as an editable draft; `0` dismisses. The top suggestion also appears as ghost text, so Tab takes it. It never submits a prompt itself. Suggestions can be skills or slash commands the session actually has; ones naming a missing command are dropped.
+
+Options: `minAnswerChars` (default `80`) and `suggestSkills` (default `true`). See the [plugin README](plugins/next-steps/README.md).
 
 ## Repository layout
 
@@ -75,18 +113,40 @@ plugins/
     .claude-plugin/plugin.json    plugin manifest and userConfig schema
     hooks/                        hook module (model-router.ts) and policy (policy.ts)
     tests/                        policy and router tests
+  flightdeck/
+    .claude-plugin/plugin.json    plugin manifest and userConfig schema
+    hooks/                        register.tsx (hooks, pane), core.ts (pure reducers and layout), rail.tsx, elapsed.tsx
+    types/                        shared state types
+    tests/                        core tests
+  next-steps/
+    .claude-plugin/plugin.json    plugin manifest and userConfig schema
+    hooks/register.tsx            hook module
+    tests/                        suggestion, press, fork and text-cleaning tests
+```
+
+## Testing
+
+From a plugin directory:
+
+```sh
+claude plugin test .
 ```
 
 ## Adding a plugin
 
 1. Create `plugins/<name>/` with a `.claude-plugin/plugin.json`.
-2. Add an entry to `.claude-plugin/marketplace.json`:
+2. Add `hooks/hooks.json` (`{ "modules": ["./register.tsx"] }`) and the module it names.
+3. Add an entry to `.claude-plugin/marketplace.json`:
 
    ```json
    { "name": "<name>", "source": "./plugins/<name>", "description": "..." }
    ```
 
-3. Users pick it up with `/plugin marketplace update skyteklabs`.
+4. Users pick it up with `/plugin marketplace update skyteklabs`.
+
+## Requirements
+
+Claude Code 2.1.287+ (plugin hook modules on by default).
 
 ## License
 
