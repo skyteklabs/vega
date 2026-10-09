@@ -53,6 +53,14 @@ The cover and the header on later pages carry the SkyTek logo, next to a labelle
 uv run skills/create-sow/scripts/build_template.py
 ```
 
+Page and type:
+
+- A4 with 1in margins. Table column widths fit the 6.27in text column.
+- Body text is TWK Lausanne 300 at 11pt, justified. Table header rows and bold labels use TWK Lausanne 550, not synthetic bold.
+- Headings are TWK Everett: Black for the cover title, Bold for section headings, Medium for subsections.
+
+The builder ends by running `scripts/embed_fonts.py`, which embeds those five faces into the `.docx` (ECMA-376 obfuscated fonts), so Word and LibreOffice render them on machines without the fonts installed. Only the five `.otf` files in `assets/fonts/` that the template uses are committed; `.gitignore` keeps the rest of the families local. To change a weight, change the font name in `build_template.py`, add the face to `FONT_FILES` in `embed_fonts.py` and to the `.gitignore` allow-list, then rebuild. A font name with no `FONT_FILES` entry is not embedded and falls back to a substitute font. `build_template.py --no-embed-fonts` skips embedding, and `embed_fonts.py [path.docx]` embeds into an existing template.
+
 To use a different template, either replace that file and run the check below, or point `templatePath` at your own file.
 
 Template rules (docxtpl):

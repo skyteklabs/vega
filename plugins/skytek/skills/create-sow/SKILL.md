@@ -9,7 +9,7 @@ allowed-tools: Bash(uv run ${CLAUDE_SKILL_DIR}/scripts/*)
 
 Every SOW is one JSON document checked against `${CLAUDE_SKILL_DIR}/assets/sow.schema.json` and poured into one Word template. The schema is the field list: each property has a `description` and an `x-question` to ask when the value is unknown. Read it before step 2.
 
-The template has ten sections: Executive Summary, Requirements and Solution Overview, Activities (one subsection per phase), Deliverables, Out of Scope / Assumptions / Risks, Success Criteria, Estimated Timeline, Project Roles, Costs, Acceptance.
+The template has ten sections: Executive Summary, Requirements and Solution Overview, Activities (one subsection per phase), Deliverables, Out of Scope / Assumptions / Risks, Success Criteria, Estimated Timeline, Project Roles, Costs, Acceptance. It prints on A4 and embeds its TWK Everett and TWK Lausanne fonts, so the `.docx` and `.pdf` look the same on machines without those fonts installed. A `templatePath` override gets none of this unless it embeds its own fonts.
 
 Settings:
 - Output folder: `${user_config.outputDir}`
