@@ -18,6 +18,7 @@ Then install a plugin from it:
 /plugin install model-router@skyteklabs
 /plugin install flightdeck@skyteklabs
 /plugin install next-steps@skyteklabs
+/plugin install burner@skyteklabs
 ```
 
 Pick a scope when asked (user scope loads the plugin in every session). Run `/plugin` to browse, enable, disable, or update installed plugins.
@@ -35,8 +36,9 @@ claude --plugin-dir ./plugins/model-router
 | [`model-router`](plugins/model-router) | 0.1.0 | Picks the model and reasoning effort per task using Jev, TypeSafe's System One decision model |
 | [`flightdeck`](plugins/flightdeck) | 0.1.0 | Live agent dashboard: main-model vitals, on-call architect, permission checks, subagent cards and swimlanes, turn receipt, session log |
 | [`next-steps`](plugins/next-steps) | 1.0.0 | Suggests up to three next prompts above the input after each turn; press `1`–`3` to draft one |
+| [`burner`](plugins/burner) | 0.1.0 | Live session cost odometer above the prompt: a burning fuse, real-world comparisons, threshold alerts |
 
-All three are function-hooks plugins (mods): a `hooks/hooks.json` points at a TypeScript module that Claude Code loads directly, with no build step and no `node_modules`.
+All four are function-hooks plugins (mods): a `hooks/hooks.json` points at a TypeScript module that Claude Code loads directly, with no build step and no `node_modules`.
 
 ### model-router
 
@@ -104,6 +106,14 @@ Press `1`, `2` or `3` from an empty prompt box to write that prompt in as an edi
 
 Options: `minAnswerChars` (default `80`) and `suggestSkills` (default `true`). See the [plugin README](plugins/next-steps/README.md).
 
+### burner
+
+A cost odometer above the prompt, read from `$.session.usage()` every second. The fuse fills with the 5-hour subscription window when there is one, otherwise with the session's spend. Each figure is also shown as burritos or McDoubles (or Indonesian foods), and a toast fires once per session at $1, $5, $10, $25 and $50 (in rupiah: Rp 20.000, Rp 50.000, Rp 100.000, Rp 500.000 and Rp 1.000.000).
+
+`/burn` opens a pane with the per-model token tally, the 5-hour and weekly windows, and the cost of the last 12 turns. `/burn [panel|show|hide|demo|lifetime]`: `hide` and `show` toggle the band, `demo` ramps from zero to $30 (Rp 489.000 at the default rate) in 20 seconds, `lifetime` prints spend across all sessions.
+
+Options: `language` (`id` for Bahasa Indonesia or `en`, default `id`), `currency` (`idr` for Rp or `usd`, default `auto` to follow the language; display only, the math stays in dollars) and `comparisons` (`us` for burritos and McDoubles, `id` for nasi padang, bakso and es teh manis, default `auto` to follow the language). The rupiah rate is `idrPerUsd` (default `16300`), or, with an `exchangeRateApiKey` from the free [exchangerate-api.com](https://www.exchangerate-api.com) plan, the live rate, fetched once per new session and cached. See the [plugin README](plugins/burner/README.md).
+
 ## Repository layout
 
 ```
@@ -122,6 +132,11 @@ plugins/
     .claude-plugin/plugin.json    plugin manifest and userConfig schema
     hooks/register.tsx            hook module
     tests/                        suggestion, press, fork and text-cleaning tests
+  burner/
+    .claude-plugin/plugin.json    plugin manifest and userConfig schema
+    hooks/                        register.tsx (hooks, band, pane), burn.ts (pure helpers)
+    types/                        shared state types
+    tests/                        helper and exchange-rate hook tests
 ```
 
 ## Testing
