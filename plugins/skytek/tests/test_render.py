@@ -68,7 +68,9 @@ def test_renders_sample(tmp_path):
     assert "9 October 2026" in xml  # ISO date formatted
     assert "Week 18" in xml  # free-text dates pass through
     assert "peak season &amp; slow" in xml  # escaped, not corrupting the XML
-    assert "<w:br/>" in xml  # line breaks in background kept
+    assert "<w:br/>" in xml  # line breaks in executive_summary kept
+    assert "3.2 Migration" in xml  # one numbered heading per phase
+    assert "word/media/" in "".join(zipfile.ZipFile(docx).namelist())  # logo embedded
 
 
 def test_never_overwrites(tmp_path):
@@ -81,7 +83,12 @@ def test_never_overwrites(tmp_path):
 
 def test_optional_fields_fall_back(tmp_path):
     data = json.loads(SAMPLE.read_text())
-    for key in ("out_of_scope", "roles", "assumptions", "governing_law", "client_signatory_name", "version"):
+    for key in (
+        "out_of_scope", "non_functional_requirements", "architecture_overview",
+        "architecture_components", "integrations", "assumptions", "risks", "client_roles",
+        "msa_reference", "governing_law", "author", "tax_treatment",
+        "client_signatory_name", "version",
+    ):
         data.pop(key)
     path = tmp_path / "minimal.json"
     path.write_text(json.dumps(data))
@@ -89,8 +96,47 @@ def test_optional_fields_fall_back(tmp_path):
     assert result.returncode == 0, result.stderr
     xml = docx_xml(json.loads(result.stdout)["docx"])
     assert "No exclusions specified." in xml
-    assert "No assumptions specified." in xml
+    assert "No non-functional requirements specified." in xml
+    assert "Technical Design Document" in xml
+    assert "No specific risks identified" in xml
+    assert "confirmed at kick-off" in xml
+    assert "single point of contact" in xml  # standard assumptions
+    assert "supersedes any other agreement" in xml  # no MSA
+    assert "exclusive of any applicable sales tax" in xml
     assert "governed by the laws" not in xml
+    assert "Author" not in xml
+
+
+def test_empty_lists_print_fallbacks(tmp_path):
+    data = json.loads(SAMPLE.read_text())
+    data["assumptions"] = []
+    data["tax_treatment"] = "inclusive"
+    path = tmp_path / "empty.json"
+    path.write_text(json.dumps(data))
+    result = render(tmp_path, path, "--no-pdf")
+    assert result.returncode == 0, result.stderr
+    xml = docx_xml(json.loads(result.stdout)["docx"])
+    assert "No assumptions specified." in xml
+    assert "single point of contact" not in xml
+    assert "inclusive of any applicable sales tax" in xml
+
+
+def test_discount_lines(tmp_path):
+    data = json.loads(SAMPLE.read_text())
+    data["fees"].append({"item": "Vendor investment", "amount": -6000})
+    path = tmp_path / "discount.json"
+    path.write_text(json.dumps(data))
+    result = render(tmp_path, path, "--no-pdf")
+    assert result.returncode == 0, result.stderr
+    xml = docx_xml(json.loads(result.stdout)["docx"])
+    assert "(USD 6,000.00)" in xml
+    assert "USD 60,000.00" in xml
+
+    data["fees"] = [{"item": "Credit", "amount": -1}]
+    path.write_text(json.dumps(data))
+    result = render(tmp_path, path, "--no-pdf")
+    assert result.returncode == 2
+    assert "total is negative" in result.stderr
 
 
 def test_rejects_invalid_data(tmp_path):
@@ -110,8 +156,8 @@ def test_extract_docx_reads_tables(tmp_path):
     result = run("extract_docx.py", out["docx"])
     assert result.returncode == 0, result.stderr
     assert "# 4. Deliverables" in result.stdout
-    assert "| 1 | Assessment report | Current state, risks, data inventory | 6 November 2026 |" in result.stdout
-    assert "- Target architecture on AWS" in result.stdout
+    assert "| Discovery | Assessment report | Current state, risks, data inventory | Document |" in result.stdout
+    assert "- Inventory current platform and data" in result.stdout
 
 
 SOFFICE = shutil.which("soffice") or shutil.which("libreoffice") or (

@@ -1,6 +1,6 @@
 {
   "name": "skytek",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Writes a Scope of Work from an RFP (docx, pdf, txt, md) or a short interview, filled into one Word template and delivered as .docx and .pdf",
   "author": {
     "name": "SkyTek Labs"
@@ -25,7 +25,7 @@
     "templatePath": {
       "type": "string",
       "title": "Template override",
-      "description": "Path to your own docxtpl Word template; empty uses the bundled placeholder template",
+      "description": "Path to your own docxtpl Word template; empty uses the bundled SkyTek template",
       "default": ""
     },
     "vendorName": {
@@ -50,6 +50,12 @@
       "type": "string",
       "title": "Vendor signatory title",
       "description": "Job title of the vendor signatory; empty means the skill asks",
+      "default": ""
+    },
+    "vendorOverview": {
+      "type": "string",
+      "title": "Vendor overview",
+      "description": "Three or four lines on your company for section 1.1 of every SOW; empty means the skill asks",
       "default": ""
     }
   }

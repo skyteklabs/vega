@@ -12,20 +12,49 @@
     "vendor_address",
     "vendor_signatory_name",
     "vendor_signatory_title",
-    "background",
+    "executive_summary",
     "objectives",
-    "in_scope",
+    "vendor_overview",
+    "client_overview",
+    "functional_requirements",
+    "phases",
     "deliverables",
+    "acceptance_criteria",
+    "success_criteria",
     "start_date",
     "end_date",
-    "milestones",
-    "acceptance_criteria",
+    "timeline",
+    "vendor_roles",
     "currency",
     "pricing_model",
     "fees",
     "payment_schedule",
     "payment_terms"
   ],
+  "$defs": {
+    "text_list": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "named_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "description"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 }
+      }
+    },
+    "role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "responsibilities"],
+      "properties": {
+        "role": { "type": "string", "minLength": 1 },
+        "responsibilities": { "type": "string", "minLength": 1 }
+      }
+    }
+  },
   "properties": {
     "sow_date": {
       "type": "string",
@@ -38,6 +67,12 @@
       "default": "1.0",
       "description": "Document version on the cover.",
       "x-question": "Which document version is this? (default: 1.0)"
+    },
+    "author": {
+      "type": "string",
+      "default": "",
+      "description": "Who wrote the SOW, shown on the cover. Empty omits the line.",
+      "x-question": "Who should be named as the SOW's author?"
     },
     "client_name": {
       "type": "string",
@@ -90,32 +125,89 @@
       "description": "Job title of the vendor signatory.",
       "x-question": "What is the vendor signatory's title?"
     },
-    "background": {
+    "msa_reference": {
+      "type": "string",
+      "default": "",
+      "description": "The master agreement this SOW sits under, e.g. 'Master Services Agreement dated 1 March 2026'. Empty says the SOW stands alone.",
+      "x-question": "Is there a master services agreement (MSA) this SOW falls under? If so, its name and date."
+    },
+    "governing_law": {
+      "type": "string",
+      "default": "",
+      "description": "Jurisdiction, e.g. 'the Republic of Indonesia'. Empty omits the sentence.",
+      "x-question": "Which jurisdiction's law governs this SOW, if stated?"
+    },
+    "executive_summary": {
       "type": "string",
       "minLength": 1,
-      "description": "Why the client needs this work. Line breaks are kept.",
-      "x-question": "In a few sentences, what problem is the client trying to solve?"
+      "description": "Business value of the engagement and a high-level view of the technical outcome. Line breaks are kept.",
+      "x-question": "In a few sentences, what problem does the client need solved, and what will this engagement deliver?"
     },
     "objectives": {
-      "type": "array",
+      "$ref": "#/$defs/text_list",
       "minItems": 1,
-      "items": { "type": "string", "minLength": 1 },
       "description": "Outcomes the work must achieve, one per bullet.",
       "x-question": "What outcomes must this work achieve?"
     },
-    "in_scope": {
-      "type": "array",
-      "minItems": 1,
-      "items": { "type": "string", "minLength": 1 },
-      "description": "Work included, one per bullet.",
-      "x-question": "What work is included?"
+    "vendor_overview": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Three or four lines on the vendor's strengths, expertise and track record.",
+      "x-question": "How should SkyTek be described in three or four lines (strengths, expertise, track record)?"
     },
-    "out_of_scope": {
+    "client_overview": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The client, its industry, and its current technology relevant to this work.",
+      "x-question": "Briefly, who is the client, what industry are they in, and what do they run today that this work touches?"
+    },
+    "functional_requirements": {
+      "$ref": "#/$defs/text_list",
+      "minItems": 1,
+      "description": "What the solution does: features and behaviours, one per row.",
+      "x-question": "What must the solution do (features, user actions, behaviours)?"
+    },
+    "non_functional_requirements": {
+      "$ref": "#/$defs/text_list",
+      "default": [],
+      "description": "How well it does it: performance, security, availability, scale. Empty prints a fallback line.",
+      "x-question": "Any non-functional requirements (performance, security, availability, scale)?"
+    },
+    "architecture_overview": {
+      "type": "string",
+      "default": "",
+      "description": "Text overview of the target architecture. Empty prints a line deferring it to the technical design document.",
+      "x-question": "Can you describe the target architecture at a high level?"
+    },
+    "architecture_components": {
       "type": "array",
       "default": [],
-      "items": { "type": "string", "minLength": 1 },
-      "description": "Work explicitly excluded. Empty prints 'No exclusions specified.'",
-      "x-question": "Is anything explicitly excluded?"
+      "items": { "$ref": "#/$defs/named_item" },
+      "description": "Core solution components and each one's role.",
+      "x-question": "What are the main components of the solution, and what does each do?"
+    },
+    "integrations": {
+      "type": "array",
+      "default": [],
+      "items": { "$ref": "#/$defs/named_item" },
+      "description": "In-scope integrations with the client's systems: source, target and purpose.",
+      "x-question": "Which of the client's existing systems does the solution integrate with?"
+    },
+    "phases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "focus", "tasks"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "focus": { "type": "string", "minLength": 1, "description": "One or two sentences on what the phase achieves." },
+          "tasks": { "$ref": "#/$defs/text_list", "minItems": 1, "description": "Action-verb tasks: design, configure, migrate, test." }
+        }
+      },
+      "description": "The work, as phases or workstreams, each with its key tasks.",
+      "x-question": "How is the work split into phases (e.g. Discovery, Design, Build, UAT, Go-live), and what are the key tasks in each?"
     },
     "deliverables": {
       "type": "array",
@@ -123,69 +215,108 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["name", "description", "due"],
+        "required": ["phase", "name", "description"],
         "properties": {
+          "phase": { "type": "string", "minLength": 1 },
           "name": { "type": "string", "minLength": 1 },
-          "description": { "type": "string" },
-          "due": { "type": "string", "description": "YYYY-MM-DD or free text such as 'Week 4'." }
+          "description": { "type": "string", "minLength": 1, "description": "Measurable: state counts, components or environments." },
+          "format": { "type": "string", "default": "Document", "description": "e.g. Document, Presentation, Code in repository, Demonstration." }
         }
       },
-      "description": "What is handed over, with a due date each.",
-      "x-question": "What will be delivered, and when is each item due?"
-    },
-    "start_date": {
-      "type": "string",
-      "description": "Start of the engagement, YYYY-MM-DD or free text.",
-      "x-question": "When does the work start?"
-    },
-    "end_date": {
-      "type": "string",
-      "description": "End of the engagement, YYYY-MM-DD or free text.",
-      "x-question": "When does the work end?"
-    },
-    "milestones": {
-      "type": "array",
-      "minItems": 1,
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["name", "date"],
-        "properties": {
-          "name": { "type": "string", "minLength": 1 },
-          "date": { "type": "string" },
-          "description": { "type": "string", "default": "" }
-        }
-      },
-      "description": "Timeline checkpoints.",
-      "x-question": "What are the key milestones and their dates?"
-    },
-    "roles": {
-      "type": "array",
-      "default": [],
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["party", "responsibility"],
-        "properties": {
-          "party": { "type": "string", "minLength": 1 },
-          "responsibility": { "type": "string", "minLength": 1 }
-        }
-      },
-      "description": "Who does what, vendor and client. Empty drops the section's table.",
-      "x-question": "What does each side (vendor and client) own?"
-    },
-    "assumptions": {
-      "type": "array",
-      "default": [],
-      "items": { "type": "string", "minLength": 1 },
-      "description": "Conditions the estimate depends on.",
-      "x-question": "What assumptions does the estimate rely on (access, data, client availability)?"
+      "description": "What is handed over, by phase, in which format.",
+      "x-question": "What will be delivered in each phase, and in what format?"
     },
     "acceptance_criteria": {
       "type": "string",
       "minLength": 1,
       "description": "How the client accepts deliverables. Line breaks are kept.",
       "x-question": "How will the client accept deliverables (review window, sign-off)?"
+    },
+    "out_of_scope": {
+      "$ref": "#/$defs/text_list",
+      "default": [],
+      "description": "Work explicitly excluded. Empty prints 'No exclusions specified.'",
+      "x-question": "Is anything explicitly excluded?"
+    },
+    "assumptions": {
+      "$ref": "#/$defs/text_list",
+      "default": [
+        "The Client provides access to the systems, environments and data the work needs before the relevant phase starts.",
+        "The Client names a single point of contact and a project sponsor who serves as the escalation point.",
+        "The Client makes subject-matter experts available for requirements, design and testing discussions.",
+        "The Client makes project decisions within two (2) business days of a request.",
+        "The Client is responsible for all cloud, licence and third-party usage fees.",
+        "Delays on the Client's side may affect the timeline, the fees or both, and are handled through change control."
+      ],
+      "description": "Conditions the estimate depends on. Omitted uses the standard list; an empty list prints 'No assumptions specified.'",
+      "x-question": "Use the standard assumptions (access, point of contact, SMEs, two-day decisions, client pays usage fees, delays go through change control), or add or change some?"
+    },
+    "risks": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["risk", "mitigation"],
+        "properties": {
+          "risk": { "type": "string", "minLength": 1 },
+          "mitigation": { "type": "string", "minLength": 1 }
+        }
+      },
+      "description": "Shared project risks and how each is mitigated. Empty prints a fallback line.",
+      "x-question": "What are the main project risks, and how will each be mitigated?"
+    },
+    "change_control": {
+      "type": "string",
+      "default": "Either party may request a change to this SOW in writing. The Vendor will assess the impact on scope, timeline and fees within five business days. No change takes effect until both parties sign a change order.",
+      "description": "How scope changes are handled. Line breaks are kept.",
+      "x-question": "Use the standard change-control clause, or a custom one?"
+    },
+    "success_criteria": {
+      "$ref": "#/$defs/text_list",
+      "minItems": 1,
+      "description": "What a successful project looks like, aligned with the deliverables. 'Completion of all deliverables' is printed first automatically.",
+      "x-question": "Beyond delivering everything listed, what measurable outcomes mark this project as a success?"
+    },
+    "start_date": {
+      "type": "string",
+      "description": "Estimated start, YYYY-MM-DD or free text.",
+      "x-question": "When does the work start?"
+    },
+    "end_date": {
+      "type": "string",
+      "description": "Estimated end, YYYY-MM-DD or free text.",
+      "x-question": "When does the work end?"
+    },
+    "timeline": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["phase", "period", "activities"],
+        "properties": {
+          "phase": { "type": "string", "minLength": 1 },
+          "period": { "type": "string", "minLength": 1, "description": "e.g. 'Week 1', 'Weeks 2-5', or a date." },
+          "activities": { "type": "string", "minLength": 1, "description": "Key outcomes or deliverables in that period." }
+        }
+      },
+      "description": "Estimated schedule by phase.",
+      "x-question": "Roughly which weeks does each phase cover, and what is done in each?"
+    },
+    "vendor_roles": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/role" },
+      "description": "Vendor team roles. Include project management. No hours or rates.",
+      "x-question": "Which roles will SkyTek staff (e.g. Engagement Manager, Solution Architect, Engineers), and what does each do?"
+    },
+    "client_roles": {
+      "type": "array",
+      "default": [],
+      "items": { "$ref": "#/$defs/role" },
+      "description": "Roles the client must provide. Empty prints a fallback line.",
+      "x-question": "Which roles must the client provide (sponsor, product owner, SMEs), and what does each do?"
     },
     "currency": {
       "type": "string",
@@ -208,11 +339,11 @@
         "required": ["item", "amount"],
         "properties": {
           "item": { "type": "string", "minLength": 1 },
-          "amount": { "type": "number", "minimum": 0 }
+          "amount": { "type": "number", "description": "Negative for a discount or vendor investment." }
         }
       },
-      "description": "Fee lines; the total is computed.",
-      "x-question": "What are the fee lines and amounts?"
+      "description": "Fee lines; the total is computed and must not be negative.",
+      "x-question": "What are the fee lines and amounts (and any discount)?"
     },
     "payment_schedule": {
       "type": "array",
@@ -223,12 +354,13 @@
         "required": ["milestone", "due", "amount"],
         "properties": {
           "milestone": { "type": "string", "minLength": 1 },
-          "due": { "type": "string" },
+          "deliverables": { "type": "string", "default": "", "description": "Deliverables that must be accepted before this payment." },
+          "due": { "type": "string", "description": "Estimated completion: date or free text." },
           "amount": { "type": "number", "minimum": 0 }
         }
       },
-      "description": "When each payment is invoiced.",
-      "x-question": "When is each payment invoiced, and for how much?"
+      "description": "When each payment is invoiced, and what it depends on.",
+      "x-question": "When is each payment invoiced, for how much, and which deliverables does it depend on?"
     },
     "payment_terms": {
       "type": "string",
@@ -236,17 +368,18 @@
       "description": "e.g. 'Net 30 from invoice date'.",
       "x-question": "What are the payment terms (e.g. Net 30)?"
     },
-    "change_control": {
+    "expenses": {
       "type": "string",
-      "default": "Either party may request a change to this SOW in writing. The vendor will assess the impact on scope, timeline and fees within five business days. No change takes effect until both parties sign a change order.",
-      "description": "How scope changes are handled. Line breaks are kept.",
-      "x-question": "Use the standard change-control clause, or a custom one?"
+      "default": "Expenses, where agreed in advance between the Client and the Vendor, are paid by the Client in line with the Client's expense reimbursement policy. Expenses invoiced by the Vendor that the Client does not object to in writing are payable.",
+      "description": "Expense clause. Line breaks are kept.",
+      "x-question": "Use the standard expenses clause (pre-agreed expenses reimbursed by the client), or a custom one?"
     },
-    "governing_law": {
+    "tax_treatment": {
       "type": "string",
-      "default": "",
-      "description": "Jurisdiction, e.g. 'the Republic of Indonesia'. Empty omits the sentence.",
-      "x-question": "Which jurisdiction's law governs this SOW, if stated?"
+      "enum": ["exclusive", "inclusive"],
+      "default": "exclusive",
+      "description": "Whether the fees include sales tax or VAT.",
+      "x-question": "Are the fees exclusive or inclusive of sales tax / VAT?"
     },
     "_sources": {
       "type": "object",

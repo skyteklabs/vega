@@ -71,6 +71,8 @@ def validate(data, schema):
     if errors:
         lines = [f"{'.'.join(map(str, e.path)) or '(root)'}: {e.message}" for e in errors]
         raise SowError("invalid SOW data:\n  " + "\n  ".join(lines))
+    if sum(f["amount"] for f in data["fees"]) < 0:
+        raise SowError("invalid SOW data:\n  fees: the total is negative")
 
 
 def check_template(template, schema):
@@ -96,6 +98,8 @@ def fmt_date(value):
 
 
 def fmt_money(amount, currency):
+    if amount < 0:
+        return f"({currency} {-amount:,.2f})"
     return f"{currency} {amount:,.2f}"
 
 
@@ -118,8 +122,10 @@ def build_context(data, schema):
             ctx[name] = copy.deepcopy(prop.get("default", [] if prop.get("type") == "array" else ""))
     for name in HIDDEN:
         ctx.pop(name, None)
-    for m in ctx["milestones"]:
-        m.setdefault("description", "")
+    for d in ctx["deliverables"]:
+        d.setdefault("format", "Document")
+    for p in ctx["payment_schedule"]:
+        p.setdefault("deliverables", "")
     currency = ctx["currency"]
     total = sum(f["amount"] for f in ctx["fees"])
     for row in ctx["fees"] + ctx["payment_schedule"]:

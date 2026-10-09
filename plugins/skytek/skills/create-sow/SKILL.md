@@ -9,10 +9,12 @@ allowed-tools: Bash(uv run ${CLAUDE_SKILL_DIR}/scripts/*)
 
 Every SOW is one JSON document checked against `${CLAUDE_SKILL_DIR}/assets/sow.schema.json` and poured into one Word template. The schema is the field list: each property has a `description` and an `x-question` to ask when the value is unknown. Read it before step 2.
 
+The template has ten sections: Executive Summary, Requirements and Solution Overview, Activities (one subsection per phase), Deliverables, Out of Scope / Assumptions / Risks, Success Criteria, Estimated Timeline, Project Roles, Costs, Acceptance.
+
 Settings:
 - Output folder: `${user_config.outputDir}`
 - Template override: `${user_config.templatePath}` (empty means the bundled template)
-- Vendor defaults: name `${user_config.vendorName}`, address `${user_config.vendorAddress}`, signatory `${user_config.vendorSignatoryName}`, `${user_config.vendorSignatoryTitle}`. An empty default is a gap to fill in step 3.
+- Vendor defaults: name `${user_config.vendorName}`, address `${user_config.vendorAddress}`, signatory `${user_config.vendorSignatoryName}`, `${user_config.vendorSignatoryTitle}`, overview (`vendor_overview`) `${user_config.vendorOverview}`. An empty default is a gap to fill in step 3.
 
 Scripts run with `uv run`, which fetches their dependencies on first use. Add `--template <override>` to every `render_sow.py` call when the override is set.
 
@@ -45,7 +47,11 @@ Fill a draft JSON with every field the RFP answers. Record each field's origin i
 
 Dates are `YYYY-MM-DD` wherever the source gives a real date, and free text ("Week 4") otherwise. `sow_date` defaults to today.
 
-Pricing, rates, currency, payment schedule, payment terms and governing law come only from the RFP or the user. A budget ceiling in an RFP is context, not the fee.
+Pricing, rates, currency, payment schedule, payment terms, tax treatment and governing law come only from the RFP or the user. A budget ceiling in an RFP is context, not the fee.
+
+Write tasks with action verbs (design, configure, migrate, test) and make deliverables and success criteria measurable: state counts, components or environments. Avoid "up to" for quantities. Never put hours, hourly rates or rate cards in vendor roles.
+
+Leave `assumptions` out of the JSON to get the schema's standard list. Write it out only when the user changes that list.
 
 Done when every schema field is either filled or listed as a gap.
 
@@ -53,7 +59,7 @@ Done when every schema field is either filled or listed as a gap.
 
 Ask only about the gaps, using each field's `x-question`.
 - Ask in batches of up to five questions, grouped by template section.
-- Use AskUserQuestion for fields with fixed options: `pricing_model`, `currency` (offer USD and IDR; Other covers the rest), and `change_control` (standard or custom).
+- Use AskUserQuestion for fields with fixed options: `pricing_model`, `currency` (offer USD and IDR; Other covers the rest), `tax_treatment`, `assumptions`, `change_control` and `expenses` (standard or custom).
 - Ask everything else in plain chat.
 - Optional fields (not in the schema's `required`) go in one last batch, which the user may skip.
 
