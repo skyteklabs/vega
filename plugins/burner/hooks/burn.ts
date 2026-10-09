@@ -142,13 +142,13 @@ export const TEXT = {
     models: 'Models',
   },
   id: {
-    burn: 'BAKAR',
+    burn: 'BURN',
     demo: 'DEMO',
-    sessionBurn: 'BAKAR SESI',
-    demoBurn: 'DEMO BAKAR',
+    sessionBurn: 'BURN SESSION',
+    demoBurn: 'BURN DEMO',
     fiveHourShort: '5j',
-    weekShort: 'mg',
-    noModelTurns: 'belum ada giliran model',
+    weekShort: '7h',
+    noModelTurns: 'belum ada model terpilih',
     lifetime: 'total',
     hide: 'sembunyikan',
     limits: 'Batas',
@@ -255,7 +255,7 @@ export const resetsIn = (iso: string, now: number, lang: Lang = 'en') => {
   const m = Math.floor(ms / 60_000)
   const d = Math.floor(m / 1440)
   const h = Math.floor((m % 1440) / 60)
-  if (lang === 'id') return d > 0 ? `${d}hr ${h}j lagi` : h > 0 ? `${h}j ${m % 60}m lagi` : `${m}m lagi`
+  if (lang === 'id') return d > 0 ? `${d}h ${h}j lagi` : h > 0 ? `${h}j ${m % 60}m lagi` : `${m}m lagi`
   return d > 0 ? `in ${d}d ${h}h` : h > 0 ? `in ${h}h ${m % 60}m` : `in ${m}m`
 }
 
