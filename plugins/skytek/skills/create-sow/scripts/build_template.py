@@ -184,6 +184,7 @@ def style_doc(doc):
     normal.element.rPr.rFonts.set(qn("w:eastAsia"), CONTENT_FONT)
     normal.font.size = Pt(NORMAL_SIZE)
     normal.font.color.rgb = INK
+    normal.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     normal.paragraph_format.space_after = Pt(6)
     normal.paragraph_format.line_spacing = 1.15
     headings = (
