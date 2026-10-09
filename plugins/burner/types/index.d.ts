@@ -18,6 +18,6 @@ export type ModelTally = { input: number; output: number; turns: number }
 
 declare module 'claude-code' {
   interface PluginState {
-    'burner': { burn: Burn; isHidden: boolean; turns: number[]; turnStart: number; models: Record<string, ModelTally> }
+    'burner': { burn: Burn; isHidden: boolean; turns: number[]; turnStart: number; models: Record<string, ModelTally>; paneOpenedAt: number }
   }
 }

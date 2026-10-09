@@ -18,11 +18,14 @@ const isHidden = atom({ plugin: 'burner', key: 'isHidden' } as const, false)
 const models = atom({ plugin: 'burner', key: 'models' } as const, {} as Record<string, ModelTally>)
 const turns = atom({ plugin: 'burner', key: 'turns' } as const, [] as number[])
 const turnStart = atom({ plugin: 'burner', key: 'turnStart' } as const, 0)
+const paneOpenedAt = atom({ plugin: 'burner', key: 'paneOpenedAt' } as const, 0)
 
 const GOLD = '#c2a87e'
 const PAPER = '#E8E2D6'
 const RED = '#e5484d'
 const ORANGE = '#e8833a'
+const WHITE_HOT = '#fff4e0'
+const EMBER = '#241a14'
 
 const DEMO_MS = 20_000
 const DEMO_TOP = 30
@@ -30,6 +33,7 @@ const DEMO_HOLD_MS = 6_000
 
 let tweenTimer: { cancel: () => void } | null = null
 let sparkTimer: { cancel: () => void } | null = null
+let burnInTimer: { cancel: () => void } | null = null
 let sparkSize = 0
 // Set when a blit rejected (not refused): the next cost tick restarts the band's fire.
 let isSparkFailed = false
@@ -127,7 +131,12 @@ const loadRate = async ($: EngineInterface) => {
   $.ui.invalidate('ui.render')
 }
 
-const openPane = ($: EngineInterface) => $.ui.open({ id: PANE, title: 'Burner', focus: true })
+const openPane = async ($: EngineInterface) => {
+  // Marks the moment to burn the title in from, each time the pane opens.
+  const now = await $.clock.now()
+  await update($, paneOpenedAt, () => now)
+  return $.ui.open({ id: PANE, title: 'Burner', focus: true })
+}
 
 type Reading = { sessionId: string; usd: number }
 
@@ -249,6 +258,45 @@ const startTween = ($: EngineInterface) => {
 
 /** The bar's fill: the 5-hour window on a subscription, else the spend's heat. */
 const fill = (b: Burn) => (b.isDemo || b.session < 0 ? heat(b.shown, cfg.currency, cfg.idrPerUsd) : Math.max(0.02, Math.min(1, b.session / 100)))
+
+// The pane's pop-up animation: its title burns in letter by letter (unlit
+// ember, a white-hot flash, cooling to the title's resting color), each
+// letter starting BURN_IN_STAGGER_MS after the one before it.
+const BURN_IN_CHAR_MS = 380
+const BURN_IN_STAGGER_MS = 35
+const burnInDuration = (chars: number) => chars * BURN_IN_STAGGER_MS + BURN_IN_CHAR_MS
+
+const hexToInt = (hex: string) => parseInt(hex.slice(1), 16)
+const mixHex = (a: string, b: string, t: number) => {
+  const ai = hexToInt(a)
+  const bi = hexToInt(b)
+  const ch = (shift: number) => Math.round(((ai >> shift) & 0xff) * (1 - t) + ((bi >> shift) & 0xff) * t)
+  return `#${[16, 8, 0].map(shift => ch(shift).toString(16).padStart(2, '0')).join('')}`
+}
+
+/** `text`, each letter paired with its own color at `elapsed`: unlit, white-hot, then `restColor`. */
+const burnInChars = (text: string, elapsed: number, restColor: string): { ch: string; color: string }[] =>
+  [...text].map((ch, i) => {
+    const p = Math.max(0, Math.min(1, (elapsed - i * BURN_IN_STAGGER_MS) / BURN_IN_CHAR_MS))
+    const color = p <= 0 ? EMBER : p < 0.5 ? mixHex(EMBER, WHITE_HOT, p * 2) : mixHex(WHITE_HOT, restColor, (p - 0.5) * 2)
+    return { ch, color }
+  })
+
+/** Redraws the pane 20 times a second while its title is still burning in, then stops itself. */
+const startBurnIn = ($: EngineInterface) => {
+  if (burnInTimer) return
+  const timer = $.clock.every(50, () => {
+    void Promise.all([read($, paneOpenedAt), read($, burn), $.clock.now()]).then(([openedAt, b, now]) => {
+      const title = b.isDemo ? cfg.text.demoBurn : cfg.text.sessionBurn
+      if (!openedAt || now - openedAt >= burnInDuration(title.length)) {
+        timer.cancel()
+        if (burnInTimer === timer) burnInTimer = null
+      }
+      $.ui.invalidate('ui.render')
+    })
+  })
+  burnInTimer = timer
+}
 
 /** Animates the fire by blitting the bar while the band is mounted. */
 const startSpark = ($: EngineInterface, columns: number) => {
@@ -410,29 +458,35 @@ export const register: Register = (on, options) => {
       startSpark($, bar)
     }
 
+    // The band is shared: keep what the plugins beneath draw, under the meter.
+    const below = await next(e)
+
     return (
-      <Box gap={2} alignItems="flex-end">
-        <Box flexDirection="column">
-          <Text color={color} bold>{b.isDemo ? cfg.text.demo : cfg.text.burn}</Text>
-          <Text color={color} bold>{sessionLine}</Text>
-          <Text dimColor>{weekLine}</Text>
-        </Box>
-        {hasFire ? (
-          <Raster key="fire" columns={bar} rows={FIRE_ROWS} cells={fireCells(bar, level, level, now / 1000)} />
-        ) : (
-          <Text color={color}>{barText(bar, level)}</Text>
-        )}
-        <Box flexDirection="column">
-          <Text>
-            <Text color={isRolling ? color : PAPER} bold>{cash(b.shown)}</Text>
-            <Text color={GOLD}>{` ${thatIs(b.shown, which)}`}</Text>
-          </Text>
-          <Text dimColor>{used || cfg.text.noModelTurns}</Text>
-          <Box gap={2}>
-            <Text dimColor>{`${cfg.text.lifetime} ${cash(b.lifetime)}`}</Text>
-            <Button key="hide" label={cfg.text.hide} plain onPress={() => void update($, isHidden, () => true)} />
+      <Box flexDirection="column">
+        <Box gap={2} alignItems="flex-end">
+          <Box flexDirection="column">
+            <Text color={color} bold>{b.isDemo ? cfg.text.demo : cfg.text.burn}</Text>
+            <Text color={color} bold>{sessionLine}</Text>
+            <Text dimColor>{weekLine}</Text>
+          </Box>
+          {hasFire ? (
+            <Raster key="fire" columns={bar} rows={FIRE_ROWS} cells={fireCells(bar, level, level, now / 1000)} />
+          ) : (
+            <Text color={color}>{barText(bar, level)}</Text>
+          )}
+          <Box flexDirection="column">
+            <Text>
+              <Text color={isRolling ? color : PAPER} bold>{cash(b.shown)}</Text>
+              <Text color={GOLD}>{` ${thatIs(b.shown, which)}`}</Text>
+            </Text>
+            <Text dimColor>{used || cfg.text.noModelTurns}</Text>
+            <Box gap={2}>
+              <Text dimColor>{`${cfg.text.lifetime} ${cash(b.lifetime)}`}</Text>
+              <Button key="hide" label={cfg.text.hide} plain onPress={() => void update($, isHidden, () => true)} />
+            </Box>
           </Box>
         </Box>
+        {below}
       </Box>
     )
   })
@@ -454,13 +508,28 @@ export const register: Register = (on, options) => {
     const windowBar = (n: number) => (n < 0 ? '' : barText(meter, Math.max(0, Math.min(1, n / 100))))
     const top = Math.max(0.01, ...history)
     const turnBar = Math.max(8, Math.min(36, width - 22))
+    const title = b.isDemo ? cfg.text.demoBurn : cfg.text.sessionBurn
+    const openedAt = await read($, paneOpenedAt)
+    const burnElapsed = openedAt ? now - openedAt : Infinity
+    const isBurningIn = burnElapsed < burnInDuration(title.length)
 
     if (hasFire) startPaneFire($, width)
+    if (isBurningIn) startBurnIn($)
 
     return (
       <Box flexDirection="column" paddingX={1}>
         <Box justifyContent="space-between">
-          <Text color={color} bold>{b.isDemo ? cfg.text.demoBurn : cfg.text.sessionBurn}</Text>
+          {isBurningIn ? (
+            <Text bold>
+              {burnInChars(title, burnElapsed, color).map((s, i) => (
+                <Text key={`title-${i}`} color={s.color}>
+                  {s.ch}
+                </Text>
+              ))}
+            </Text>
+          ) : (
+            <Text color={color} bold>{title}</Text>
+          )}
           <Text dimColor>{`${cfg.text.lifetime} ${cash(b.lifetime)}`}</Text>
         </Box>
         <Text>
