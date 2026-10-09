@@ -2,3 +2,5 @@ graphify-out/
 .abide
 __pycache__/
 .pytest_cache/
+.DS_Store
+plugins/skytek/skills/create-sow/example-docs/
