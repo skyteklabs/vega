@@ -462,13 +462,38 @@ def build(out: Path):
     tag(doc, "{%p endif %}")
 
     h1(doc, 9)
-    h2(doc, "9.1 Professional services")
+    h2(doc, "9.1 Pricing")
     doc.add_paragraph("Pricing model: {{ pricing_model }}. All amounts are in {{ currency }}.")
+    subtotal_label = "{% if fees %}Subtotal{% else %}Total cost{% endif %}"
+    tag(doc, "{%p if project_type == 'package' %}")
+    doc.add_paragraph("The package comprises:")
     loop_table(
-        doc, ["Services", "Cost"], "f in fees",
-        ["{{ f.item }}", "{{ f.amount }}"],
-        total=["Total cost", "{{ total_fees }}"], widths=[4.5, 2.0],
+        doc,
+        ["Item", "Description", "Qty", "Unit price", "Amount"],
+        "i in package_items",
+        ["{{ i.item }}", "{{ i.description }}", "{{ i.quantity }}", "{{ i.unit_price }}", "{{ i.amount }}"],
+        total=[subtotal_label, "", "", "", "{{ subtotal }}"],
+        widths=[1.6, 2.0, 0.6, 1.15, 1.15],
     )
+    tag(doc, "{%p else %}")
+    doc.add_paragraph("Professional services are estimated by role in mandays:")
+    loop_table(
+        doc,
+        ["Role", "Mandays", "Day rate", "Amount"],
+        "e in effort",
+        ["{{ e.role }}", "{{ e.mandays }}", "{{ e.day_rate }}", "{{ e.amount }}"],
+        total=[subtotal_label, "{{ total_mandays }}", "", "{{ subtotal }}"],
+        widths=[2.6, 1.0, 1.4, 1.5],
+    )
+    tag(doc, "{%p endif %}")
+    tag(doc, "{%p if fees %}")
+    doc.add_paragraph("Other fees and adjustments:")
+    loop_table(
+        doc, ["Item", "Amount"], "f in fees",
+        ["{{ f.item }}", "{{ f.amount }}"],
+        total=["Total cost", "{{ total_fees }}"], widths=[5.0, 1.5],
+    )
+    tag(doc, "{%p endif %}")
     doc.add_paragraph(
         "Payments are invoiced on the following milestones. Each milestone’s deliverables "
         "must be completed and accepted by the Client before it is invoiced."

@@ -47,9 +47,17 @@ Fill a draft JSON with every field the RFP answers. Record each field's origin i
 
 Dates are `YYYY-MM-DD` wherever the source gives a real date, and free text ("Week 4") otherwise. `sow_date` defaults to today.
 
-Pricing, rates, currency, payment schedule, payment terms, tax treatment and governing law come only from the RFP or the user. A budget ceiling in an RFP is context, not the fee.
+Settle `project_type` first, since it decides how Costs is priced:
+- `package`: a packaged solution. Price it with `package_items` (item, quantity, unit price). No mandays appear anywhere in the SOW.
+- `professional_services`: priced by effort. `effort` lists each role's mandays and day rate; amounts, total mandays and total cost are computed.
 
-Write tasks with action verbs (design, configure, migrate, test) and make deliverables and success criteria measurable: state counts, components or environments. Avoid "up to" for quantities. Never put hours, hourly rates or rate cards in vendor roles.
+The `payment_schedule` amounts must sum to the total cost (package/effort subtotal plus `fees`); `render_sow.py` rejects a mismatch with exit 2.
+
+All other sections are the same for both. `fees` holds optional extra lines on top, such as a discount (negative) or third-party costs.
+
+Pricing, package items, mandays, day rates, currency, payment schedule, payment terms, tax treatment and governing law come only from the RFP or the user. A budget ceiling in an RFP is context, not the fee.
+
+Write tasks with action verbs (design, configure, migrate, test) and make deliverables and success criteria measurable: state counts, components or environments. Avoid "up to" for quantities. Mandays and rates go only in `effort`, never in vendor roles.
 
 Leave `assumptions` out of the JSON to get the schema's standard list. Write it out only when the user changes that list.
 
@@ -59,7 +67,7 @@ Done when every schema field is either filled or listed as a gap.
 
 Ask only about the gaps, using each field's `x-question`.
 - Ask in batches of up to five questions, grouped by template section.
-- Use AskUserQuestion for fields with fixed options: `pricing_model`, `currency` (offer USD and IDR; Other covers the rest), `tax_treatment`, `assumptions`, `change_control` and `expenses` (standard or custom).
+- Use AskUserQuestion for fields with fixed options: `project_type` (ask it first if the RFP doesn't settle it), `pricing_model`, `currency` (offer USD and IDR; Other covers the rest), `tax_treatment`, `assumptions`, `change_control` and `expenses` (standard or custom).
 - Ask everything else in plain chat.
 - Optional fields (not in the schema's `required`) go in one last batch, which the user may skip.
 

@@ -37,7 +37,7 @@ DEFAULT_TEMPLATE = SKILL_DIR / "assets" / "sow-template.docx"
 SCHEMA_PATH = SKILL_DIR / "assets" / "sow.schema.json"
 
 # Template variables computed here rather than supplied in the data.
-COMPUTED = {"total_fees"}
+COMPUTED = {"subtotal", "total_fees", "total_mandays"}
 # Schema properties that never reach the template.
 HIDDEN = {"_sources"}
 
@@ -71,8 +71,28 @@ def validate(data, schema):
     if errors:
         lines = [f"{'.'.join(map(str, e.path)) or '(root)'}: {e.message}" for e in errors]
         raise SowError("invalid SOW data:\n  " + "\n  ".join(lines))
-    if sum(f["amount"] for f in data["fees"]) < 0:
+    total = pricing(data)["total"]
+    if total < 0:
         raise SowError("invalid SOW data:\n  fees: the total is negative")
+    scheduled = sum(p["amount"] for p in data["payment_schedule"])
+    if round(scheduled - total, 2) != 0:
+        raise SowError(
+            "invalid SOW data:\n  payment_schedule: amounts sum to "
+            f"{scheduled:,.2f}, total cost is {total:,.2f}"
+        )
+
+
+def pricing(data):
+    """Line amounts for the package items or effort, then subtotal, total and total mandays."""
+    if data["project_type"] == "package":
+        lines = [i["quantity"] * i["unit_price"] for i in data["package_items"]]
+        mandays = 0
+    else:
+        lines = [e["mandays"] * e["day_rate"] for e in data["effort"]]
+        mandays = sum(e["mandays"] for e in data["effort"])
+    subtotal = sum(lines)
+    total = subtotal + sum(f["amount"] for f in data.get("fees", []))
+    return {"lines": lines, "subtotal": subtotal, "total": total, "mandays": mandays}
 
 
 def check_template(template, schema):
@@ -95,6 +115,11 @@ def fmt_date(value):
         d = dt.date.fromisoformat(value)
         return f"{d.day} {d.strftime('%B %Y')}"
     return value
+
+
+def fmt_number(value):
+    """10 -> '10', 2.5 -> '2.5', 1200 -> '1,200'."""
+    return f"{value:,.0f}" if value == int(value) else f"{value:,}"
 
 
 def fmt_money(amount, currency):
@@ -127,12 +152,24 @@ def build_context(data, schema):
     for p in ctx["payment_schedule"]:
         p.setdefault("deliverables", "")
     currency = ctx["currency"]
-    total = sum(f["amount"] for f in ctx["fees"])
-    for row in ctx["fees"] + ctx["payment_schedule"]:
+    totals = pricing(data)
+    lines = ctx["package_items"] if ctx["project_type"] == "package" else ctx["effort"]
+    for row, amount in zip(lines, totals["lines"]):
+        row["amount"] = amount
+    for row in ctx["package_items"]:
+        row.setdefault("description", "")
+        row["quantity"] = fmt_number(row["quantity"])
+        row["unit_price"] = fmt_money(row["unit_price"], currency)
+    for row in ctx["effort"]:
+        row["mandays"] = fmt_number(row["mandays"])
+        row["day_rate"] = fmt_money(row["day_rate"], currency)
+    for row in lines + ctx["fees"] + ctx["payment_schedule"]:
         row["amount"] = fmt_money(row["amount"], currency)
     ctx["pricing_model"] = PRICING_LABELS[ctx["pricing_model"]]
     ctx = display(ctx)
-    ctx["total_fees"] = fmt_money(total, currency)
+    ctx["subtotal"] = fmt_money(totals["subtotal"], currency)
+    ctx["total_fees"] = fmt_money(totals["total"], currency)
+    ctx["total_mandays"] = fmt_number(totals["mandays"])
     return ctx
 
 

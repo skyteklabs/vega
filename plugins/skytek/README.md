@@ -44,7 +44,7 @@ Scripts run with [`uv`](https://docs.astral.sh/uv/) and declare their own depend
 6. Success Criteria
 7. Estimated Timeline
 8. Project Roles (vendor and client)
-9. Costs (fees, payment milestones, expenses, taxes)
+9. Costs (package items or effort in mandays, extra fees, payment milestones, expenses, taxes)
 10. Acceptance (signatures)
 
 The cover and the header on later pages carry the SkyTek logo. The builder rasterises it from `assets/skytek-logo.svg`, because a Word template made with python-docx can't embed SVG. After changing the layout or the logo, rebuild:
@@ -84,10 +84,14 @@ uv run skills/create-sow/scripts/render_sow.py --check-template [--template path
 | 6. Success Criteria | `success_criteria[]` |
 | 7. Timeline | `start_date`, `end_date`, `timeline[]` (`phase`, `period`, `activities`) |
 | 8. Roles | `vendor_roles[]`, `client_roles[]` (`role`, `responsibilities`) |
-| 9. Costs | `currency`, `pricing_model`, `fees[]` (`item`, `amount`; negative for a discount), `total_fees` (computed), `payment_schedule[]` (`milestone`, `deliverables`, `due`, `amount`), `payment_terms`, `expenses`, `tax_treatment` |
+| 9. Costs | `project_type`, `currency`, `pricing_model`, `package_items[]` (`item`, `description`, `quantity`, `unit_price`) or `effort[]` (`role`, `mandays`, `day_rate`), `fees[]` (`item`, `amount`; negative for a discount), `subtotal`, `total_fees`, `total_mandays` (computed), `payment_schedule[]` (`milestone`, `deliverables`, `due`, `amount`), `payment_terms`, `expenses`, `tax_treatment` |
 | 10. Acceptance | `vendor_signatory_name`, `vendor_signatory_title`, `client_signatory_name`, `client_signatory_title` |
 
-The 0.2.0 schema replaced `background`, `in_scope`, `milestones` and `roles`. A `.sow.json` saved by 0.1.0 fails validation; move its values into the new fields to re-render it.
+Older `.sow.json` files fail validation:
+- 0.1.0: `background`, `in_scope`, `milestones` and `roles` were replaced; move their values into the new fields.
+- 0.2.0: add `project_type`, and move the priced lines out of `fees` into `package_items` or `effort`.
+
+`project_type` picks the pricing table: `package` needs `package_items` and shows no mandays; `professional_services` needs `effort`. The schema rejects the wrong list for the type.
 
 `_sources` is kept in the `.sow.json` and never rendered.
 
@@ -108,6 +112,7 @@ The 0.2.0 schema replaced `background`, `in_scope`, `milestones` and `roles`. A 
 - no tags left in the output;
 - formatting of dates, money, escaping and line breaks;
 - fallbacks for optional fields and empty lists;
+- package and effort pricing, and rejecting pricing that doesn't match `project_type`;
 - discount lines and rejecting a negative total;
 - versioned file names;
 - rejecting invalid data;

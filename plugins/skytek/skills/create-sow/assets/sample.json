@@ -91,12 +91,13 @@
   "client_roles": [
     { "role": "Project Sponsor", "responsibilities": "Escalation point; approves deliverables and change orders" }
   ],
+  "project_type": "professional_services",
   "currency": "USD",
   "pricing_model": "fixed_price",
-  "fees": [
-    { "item": "Assessment and design", "amount": 18000 },
-    { "item": "Migration and cut-over", "amount": 42000 },
-    { "item": "Hypercare", "amount": 6000 }
+  "effort": [
+    { "role": "Solution Architect", "mandays": 20, "day_rate": 900 },
+    { "role": "Cloud Engineer", "mandays": 70, "day_rate": 600 },
+    { "role": "Engagement Manager", "mandays": 10, "day_rate": 600 }
   ],
   "payment_schedule": [
     { "milestone": "Contract signature", "due": "2026-10-26", "amount": 19800 },
@@ -108,6 +109,6 @@
   "_sources": {
     "client_name": "rfp",
     "vendor_signatory_name": "default",
-    "fees": "user"
+    "effort": "user"
   }
 }

@@ -25,11 +25,21 @@
     "end_date",
     "timeline",
     "vendor_roles",
+    "project_type",
     "currency",
     "pricing_model",
-    "fees",
     "payment_schedule",
     "payment_terms"
+  ],
+  "allOf": [
+    {
+      "if": { "properties": { "project_type": { "const": "package" } } },
+      "then": { "required": ["package_items"], "not": { "required": ["effort"] } }
+    },
+    {
+      "if": { "properties": { "project_type": { "const": "professional_services" } } },
+      "then": { "required": ["effort"], "not": { "required": ["package_items"] } }
+    }
   ],
   "$defs": {
     "text_list": {
@@ -308,7 +318,7 @@
       "type": "array",
       "minItems": 1,
       "items": { "$ref": "#/$defs/role" },
-      "description": "Vendor team roles. Include project management. No hours or rates.",
+      "description": "Vendor team roles. Include project management. Mandays and rates belong in effort, not here.",
       "x-question": "Which roles will SkyTek staff (e.g. Engagement Manager, Solution Architect, Engineers), and what does each do?"
     },
     "client_roles": {
@@ -317,6 +327,45 @@
       "items": { "$ref": "#/$defs/role" },
       "description": "Roles the client must provide. Empty prints a fallback line.",
       "x-question": "Which roles must the client provide (sponsor, product owner, SMEs), and what does each do?"
+    },
+    "project_type": {
+      "type": "string",
+      "enum": ["package", "professional_services"],
+      "description": "package: a packaged solution priced by item, with no mandays. professional_services: priced by effort, role x mandays x day rate.",
+      "x-question": "Is this a packaged solution (priced by item) or professional services (priced by mandays)?"
+    },
+    "package_items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["item", "quantity", "unit_price"],
+        "properties": {
+          "item": { "type": "string", "minLength": 1 },
+          "description": { "type": "string", "default": "" },
+          "quantity": { "type": "number", "exclusiveMinimum": 0 },
+          "unit_price": { "type": "number", "minimum": 0 }
+        }
+      },
+      "description": "Package projects only: priced lines such as licences, subscriptions or a fixed setup fee. Amounts are computed.",
+      "x-question": "What does the package include, in what quantity, at what unit price?"
+    },
+    "effort": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["role", "mandays", "day_rate"],
+        "properties": {
+          "role": { "type": "string", "minLength": 1 },
+          "mandays": { "type": "number", "exclusiveMinimum": 0 },
+          "day_rate": { "type": "number", "minimum": 0 }
+        }
+      },
+      "description": "Professional-services projects only: mandays and day rate per role. Amounts, total mandays and total cost are computed.",
+      "x-question": "How many mandays does each role need, and at what day rate?"
     },
     "currency": {
       "type": "string",
@@ -332,7 +381,7 @@
     },
     "fees": {
       "type": "array",
-      "minItems": 1,
+      "default": [],
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -342,8 +391,8 @@
           "amount": { "type": "number", "description": "Negative for a discount or vendor investment." }
         }
       },
-      "description": "Fee lines; the total is computed and must not be negative.",
-      "x-question": "What are the fee lines and amounts (and any discount)?"
+      "description": "Extra lines on top of the package items or effort: discounts (negative), third-party costs, one-off fees. The total must not be negative.",
+      "x-question": "Any other fees or discounts on top of that?"
     },
     "payment_schedule": {
       "type": "array",

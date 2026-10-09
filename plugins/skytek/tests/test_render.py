@@ -121,22 +121,73 @@ def test_empty_lists_print_fallbacks(tmp_path):
     assert "inclusive of any applicable sales tax" in xml
 
 
+def test_effort_pricing(tmp_path):
+    result = render(tmp_path, SAMPLE, "--no-pdf")
+    assert result.returncode == 0, result.stderr
+    xml = docx_xml(json.loads(result.stdout)["docx"])
+    assert "USD 18,000.00" in xml  # 20 mandays x USD 900
+    assert ">100<" in xml  # total mandays
+    assert "Unit price" not in xml
+
+
+def test_package_pricing(tmp_path):
+    data = json.loads(SAMPLE.read_text())
+    data["project_type"] = "package"
+    del data["effort"]
+    data["package_items"] = [
+        {"item": "Platform licence", "description": "Annual, per vehicle", "quantity": 1200, "unit_price": 40},
+        {"item": "Setup", "quantity": 1, "unit_price": 18000},
+    ]
+    path = tmp_path / "package.json"
+    path.write_text(json.dumps(data))
+    result = render(tmp_path, path, "--no-pdf")
+    assert result.returncode == 0, result.stderr
+    xml = docx_xml(json.loads(result.stdout)["docx"])
+    assert "1,200" in xml and "USD 48,000.00" in xml
+    assert "USD 66,000.00" in xml
+    assert "Mandays" not in xml and "Day rate" not in xml
+
+
+def test_pricing_must_match_project_type(tmp_path):
+    data = json.loads(SAMPLE.read_text())
+    data["project_type"] = "package"  # still carries effort, lacks package_items
+    path = tmp_path / "mismatch.json"
+    path.write_text(json.dumps(data))
+    result = render(tmp_path, path, "--no-pdf")
+    assert result.returncode == 2
+    assert "package_items" in result.stderr
+
+
 def test_discount_lines(tmp_path):
     data = json.loads(SAMPLE.read_text())
-    data["fees"].append({"item": "Vendor investment", "amount": -6000})
+    data["fees"] = [{"item": "Vendor investment", "amount": -6000}]
+    data["payment_schedule"][-1]["amount"] -= 6000
     path = tmp_path / "discount.json"
     path.write_text(json.dumps(data))
     result = render(tmp_path, path, "--no-pdf")
     assert result.returncode == 0, result.stderr
     xml = docx_xml(json.loads(result.stdout)["docx"])
+    assert "Subtotal" in xml
     assert "(USD 6,000.00)" in xml
     assert "USD 60,000.00" in xml
 
-    data["fees"] = [{"item": "Credit", "amount": -1}]
+    data["fees"] = [{"item": "Credit", "amount": -70000}]
     path.write_text(json.dumps(data))
     result = render(tmp_path, path, "--no-pdf")
     assert result.returncode == 2
     assert "total is negative" in result.stderr
+
+
+def test_rejects_payment_schedule_mismatch(tmp_path):
+    data = json.loads(SAMPLE.read_text())
+    data["payment_schedule"][-1]["amount"] += 1000
+    path = tmp_path / "mismatch_payment.json"
+    path.write_text(json.dumps(data))
+    result = render(tmp_path, path, "--no-pdf")
+    assert result.returncode == 2
+    assert "payment_schedule" in result.stderr
+    assert "67,000.00" in result.stderr and "66,000.00" in result.stderr
+    assert not list(tmp_path.glob("*.docx"))
 
 
 def test_rejects_invalid_data(tmp_path):
