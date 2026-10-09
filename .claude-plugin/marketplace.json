@@ -1,11 +1,12 @@
 {
   "name": "skyteklabs",
   "owner": { "name": "SkyTek Labs" },
-  "description": "SkyTek Labs plugins for Claude Code: model and effort routing, a live agent dashboard, next-prompt suggestions, and a session cost odometer",
+  "description": "SkyTek Labs plugins for Claude Code: model and effort routing, a live agent dashboard, next-prompt suggestions, a session cost odometer, and a Scope of Work writer",
   "plugins": [
     { "name": "model-router",  "source": "./plugins/model-router",  "description": "Router to optimize the model selections based on the type of the job/task working using jev" },
     { "name": "flightdeck",    "source": "./plugins/flightdeck",    "description": "Live agent dashboard: main model vitals, on-call architect, permission checks, subagent cards and swimlanes, turn receipt and session log" },
     { "name": "next-steps",    "source": "./plugins/next-steps",    "description": "Suggests up to three next prompts above the input after each turn; press 1, 2 or 3 to draft one, 0 to dismiss" },
-    { "name": "burner",        "source": "./plugins/burner",        "description": "Live session cost odometer above the prompt: a burning fuse, real-world comparisons, threshold alerts" }
+    { "name": "burner",        "source": "./plugins/burner",        "description": "Live session cost odometer above the prompt: a burning fuse, real-world comparisons, threshold alerts" },
+    { "name": "skytek-sow",    "source": "./plugins/skytek-sow",    "description": "Writes a Scope of Work from an RFP or an interview, filled into the company Word template, as .docx and .pdf" }
   ]
 }

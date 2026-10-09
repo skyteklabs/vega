@@ -1,0 +1,56 @@
+{
+  "name": "skytek-sow",
+  "version": "0.1.0",
+  "description": "Writes a Scope of Work from an RFP (docx, pdf, txt, md) or a short interview, filled into one Word template and delivered as .docx and .pdf",
+  "author": {
+    "name": "SkyTek Labs"
+  },
+  "repository": "https://github.com/skyteklabs/vega",
+  "license": "MIT",
+  "keywords": [
+    "skill",
+    "sow",
+    "scope-of-work",
+    "rfp",
+    "docx",
+    "pdf"
+  ],
+  "userConfig": {
+    "outputDir": {
+      "type": "string",
+      "title": "Output folder",
+      "description": "Where the .docx, .pdf and .sow.json files are written; relative paths resolve against the current project",
+      "default": "./sow"
+    },
+    "templatePath": {
+      "type": "string",
+      "title": "Template override",
+      "description": "Path to your own docxtpl Word template; empty uses the bundled placeholder template",
+      "default": ""
+    },
+    "vendorName": {
+      "type": "string",
+      "title": "Vendor name",
+      "description": "Your company's legal name on the cover, footer and signature block",
+      "default": "SkyTek Labs"
+    },
+    "vendorAddress": {
+      "type": "string",
+      "title": "Vendor address",
+      "description": "Your company's address; empty means the skill asks",
+      "default": ""
+    },
+    "vendorSignatoryName": {
+      "type": "string",
+      "title": "Vendor signatory",
+      "description": "Who signs SOWs for your company; empty means the skill asks",
+      "default": ""
+    },
+    "vendorSignatoryTitle": {
+      "type": "string",
+      "title": "Vendor signatory title",
+      "description": "Job title of the vendor signatory; empty means the skill asks",
+      "default": ""
+    }
+  }
+}
