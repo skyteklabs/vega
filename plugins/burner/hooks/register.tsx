@@ -31,6 +31,8 @@ const DEMO_HOLD_MS = 6_000
 let tweenTimer: { cancel: () => void } | null = null
 let sparkTimer: { cancel: () => void } | null = null
 let sparkSize = 0
+// Set when a blit rejected (not refused): the next cost tick restarts the band's fire.
+let isSparkFailed = false
 let bandId: string | null = null
 let demoStartedAt = 0
 let demoFired: number[] = []
@@ -257,6 +259,7 @@ const startSpark = ($: EngineInterface, columns: number) => {
     timer.cancel()
     if (sparkTimer === timer) sparkTimer = null
   }
+  isSparkFailed = false
   const timer = $.clock.every(80, () => {
     if (!bandId) return
     void Promise.all([read($, burn), $.clock.now()]).then(([b, now]) =>
@@ -267,7 +270,11 @@ const startSpark = ($: EngineInterface, columns: number) => {
           cells: fireCells(columns, fill(b), fill(b), now / 1000),
         })
         .then(r => r.deny && stopSpark())
-        .catch(stopSpark),
+        // Refused means the band is gone; rejected may pass, so the next tick tries again.
+        .catch(() => {
+          stopSpark()
+          isSparkFailed = true
+        }),
     )
   })
   sparkTimer = timer
@@ -283,7 +290,11 @@ const runDemo = async ($: EngineInterface) => {
   await update($, isHidden, () => false)
   await update($, burn, b => ({ ...b, shown: 0, target: 0, isDemo: true }))
   const ramp = $.clock.every(100, () => {
-    if (demoRamp !== ramp) return
+    // Replaced while this demo was still starting: stop for good, not just skip.
+    if (demoRamp !== ramp) {
+      ramp.cancel()
+      return
+    }
     void $.clock.now().then(async now => {
       const t = Math.min(1, (now - demoStartedAt) / DEMO_MS)
       // Slow start, steep finish: how a long agent session actually feels.
@@ -310,17 +321,21 @@ export const register: Register = (on, options) => {
   isRateLoaded = false
 
   on('session.start', async ($, e, next) => {
-    await $.command.register({
-      name: 'burn',
-      description: cfg.text.command,
-    })
     // A new session in this process (after /clear, say) fetches its own rate
     // and replaces the last one's timers rather than running beside them.
     isRateLoaded = false
     for (const timer of sessionTimers) timer.cancel()
+    sessionTimers = []
+    // Registering again replaces the command; any other refusal must not stop the band.
+    await $.command
+      .register({ name: 'burn', description: cfg.text.command })
+      .catch(error => $.ui.log(`[burner] /burn not registered: ${String(error)}`))
     void syncCost($)
     sessionTimers = [
-      $.clock.every(1000, () => void syncCost($)),
+      $.clock.every(1000, () => {
+        void syncCost($)
+        if (isSparkFailed && bandId && !sparkTimer) startSpark($, sparkSize)
+      }),
       // The comparison rotates every six seconds even while the spend sits still.
       $.clock.every(6000, () => $.ui.invalidate('ui.render')),
     ]

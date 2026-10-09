@@ -2,16 +2,32 @@ import type { On, SessionUsage } from 'claude-code'
 import type { Engine, MockClock } from 'claude-code/testing'
 import { expect, mock, test } from 'claude-code/testing'
 
-type World = { fetched: string[]; logs: string[]; toasts: string[]; usageReads: number; invalidations: number; sessionId: string }
+type World = { fetched: string[]; logs: string[]; toasts: string[]; usageReads: number; invalidations: number; blits: number; sessionId: string }
 
 /** The engine beneath burner: the session costs `usd`, and the exchange-rate API answers `reply`. */
 function engine(
   on: On,
-  opts: { usd: number; reply?: object; sessionId?: string; fetchThrows?: boolean; usageFails?: boolean; rateLimits?: SessionUsage['rateLimits'] },
+  opts: {
+    usd: number
+    reply?: object
+    sessionId?: string
+    fetchThrows?: boolean
+    usageFails?: boolean
+    rateLimits?: SessionUsage['rateLimits']
+    /** How the first blits go: 'reject' fails the call, 'refuse' answers `{ deny }`; later ones land. */
+    blitFirst?: { how: 'reject' | 'refuse'; count: number }
+    registerFails?: boolean
+  },
 ): World {
-  const w: World = { fetched: [], logs: [], toasts: [], usageReads: 0, invalidations: 0, sessionId: opts.sessionId ?? 's1' }
+  const w: World = { fetched: [], logs: [], toasts: [], usageReads: 0, invalidations: 0, blits: 0, sessionId: opts.sessionId ?? 's1' }
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
-  on('command.register', () => ({ value: undefined }))
+  on('command.register', (_$, e) => (opts.registerFails ? { deny: 'not now' } : { value: { command: e.name } }))
+  on('ui.blit', () => {
+    w.blits++
+    const first = opts.blitFirst
+    if (first && w.blits <= first.count) return first.how === 'reject' ? { deny: 'blit failed' } : { value: { deny: 'band gone' } }
+    return { value: {} }
+  })
   on('session.id', () => ({ value: w.sessionId }))
   on('turn.complete', (_$, e) => ({ text: e.answer }))
   on('session.usage', () => (w.usageReads++, opts.usageFails) ? { deny: 'usage unavailable' } : ({ value: { startedAt: 0, context: {} as never, rateLimits: opts.rateLimits ?? [], cost: { usd: opts.usd } } satisfies SessionUsage }))
@@ -25,7 +41,7 @@ function engine(
     w.invalidations++
     return { value: undefined }
   })
-  on('ui.open', () => ({ value: undefined }) as never)
+  on('ui.open', () => ({ value: { isPlaced: true as const } }))
   // What draws in the band when burner has nothing to show.
   on('ui.render', { component: 'AbovePrompt' }, () => ({ type: 'Text' as const, props: {}, children: ['below'] }))
   on('ui.toast', (_$, e) => {
@@ -381,4 +397,43 @@ test('/burn lifetime rotates the comparison like the band', { options: { idrPerU
   expect(String((await burnCommand($, 'lifetime')).text)).toContain('porsi nasi padang')
   await clock.advance(6000)
   expect(String((await burnCommand($, 'lifetime')).text)).toContain('mangkuk bakso')
+})
+
+const terminalBand = { ...band, surface: 'terminal' as const }
+
+test('the band\'s fire comes back after a rejected blit', async ($, on) => {
+  const clock = mock.clock(on)
+  mock.store(on)
+  mock.env(on, {})
+  const w = engine(on, { usd: 1, blitFirst: { how: 'reject', count: 1 } })
+  await start($, clock)
+  await $.ui.mount(terminalBand)
+  await clock.advance(80)
+  expect(w.blits).toBe(1)
+  // The next cost tick restarts the fire, and it keeps drawing.
+  await clock.advance(2000)
+  expect(w.blits).toBeGreaterThan(5)
+})
+
+test('the band\'s fire stays off once a blit is refused', async ($, on) => {
+  const clock = mock.clock(on)
+  mock.store(on)
+  mock.env(on, {})
+  const w = engine(on, { usd: 1, blitFirst: { how: 'refuse', count: 1 } })
+  await start($, clock)
+  await $.ui.mount(terminalBand)
+  await clock.advance(80)
+  await clock.advance(2000)
+  expect(w.blits).toBe(1)
+})
+
+test('a refused /burn registration still starts the band and logs why', async ($, on) => {
+  const clock = mock.clock(on)
+  mock.store(on)
+  mock.env(on, {})
+  const w = engine(on, { usd: 2.5, registerFails: true })
+  await start($, clock)
+  expect(w.logs.some(l => l.startsWith('[burner] /burn not registered'))).toBe(true)
+  expect(w.usageReads).toBeGreaterThan(1)
+  expect(await comparison($)).toBeDefined()
 })
