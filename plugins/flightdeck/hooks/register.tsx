@@ -1,11 +1,12 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { AgentCard, Architect, Bucket, Check, Gate, Layout, LogLine, Loop, Main, Roster, Turn, Usage, View } from '../types'
+import type { AgentCard, Architect, Bucket, Check, Gate, Layout, LogLine, Loop, Main, ModelTally, Roster, Turn, Usage, View } from '../types'
 import {
   DEFAULT_ARCHITECT,
   DEFAULT_GATE,
   DEFAULT_MAIN,
+  DEFAULT_MODEL_USAGE,
   DEFAULT_ROSTER,
   DEFAULT_TURN,
   DEFAULT_USAGE,
@@ -35,6 +36,7 @@ import {
   limitLabel,
   listOf,
   logRows,
+  modelUsageRows,
   momentOf,
   normalize,
   normalizeCard,
@@ -54,6 +56,7 @@ import {
   shorten,
   startConsult,
   stepLoop,
+  tallyModel,
 } from './core'
 import type { Config, Panel } from './core'
 
@@ -76,6 +79,7 @@ const turn = atom({ plugin: 'flightdeck', key: 'turn' } as const, DEFAULT_TURN)
 const receipt = atom({ plugin: 'flightdeck', key: 'receipt' } as const, null)
 const view = atom({ plugin: 'flightdeck', key: 'view' } as const, DEFAULT_VIEW)
 const roster = atom({ plugin: 'flightdeck', key: 'roster' } as const, DEFAULT_ROSTER)
+const modelUsage = atom({ plugin: 'flightdeck', key: 'modelUsage' } as const, DEFAULT_MODEL_USAGE)
 
 type ServerBlock = { type: string; id?: string; name?: string; tool_use_id?: string }
 
@@ -111,6 +115,9 @@ async function getView($: EngineInterface): Promise<View> {
 async function getRoster($: EngineInterface): Promise<Roster> {
   const r = normalize(DEFAULT_ROSTER, await read($, roster))
   return { architectTypes: listOf(r.architectTypes) }
+}
+async function getModelUsage($: EngineInterface): Promise<Record<string, ModelTally>> {
+  return normalize(DEFAULT_MODEL_USAGE, await read($, modelUsage))
 }
 
 /** A stored shape older than this build's: drop what cannot be read, keep the rest. */
@@ -194,6 +201,7 @@ async function resetAll($: EngineInterface) {
   await update($, turn, () => DEFAULT_TURN)
   await update($, receipt, () => null)
   await update($, view, () => DEFAULT_VIEW)
+  await update($, modelUsage, () => DEFAULT_MODEL_USAGE)
   // The context gauge waits for the next measurement rather than showing the pre-clear fill.
   await update($, usage, x => ({ ...normalize(DEFAULT_USAGE, x), pct: null, tokens: null }))
 }
@@ -312,7 +320,9 @@ export const register: Register = (on, options) => {
         const x = normalize(DEFAULT_MAIN, m)
         return { ...x, model: e.model, effort: String(e.effort ?? x.effort), steps: x.steps + 1 }
       })
-      return yield* next(e)
+      const result = yield* next(e)
+      await update($, modelUsage, mu => tallyModel(mu, e.model, result.usage))
+      return result
     }
     const result = yield* next(e)
     const id = e.agentId
@@ -325,6 +335,7 @@ export const register: Register = (on, options) => {
       const now = await $.clock.now()
       await update($, loops, l => stepLoop(listOf<Loop>(l), id, now))
     }
+    await update($, modelUsage, mu => tallyModel(mu, e.model, result.usage))
     return result
   })
 
@@ -521,7 +532,7 @@ export const register: Register = (on, options) => {
     const els = $.ui.resolve(e)
     const { Box, Text, Button } = els
     const hasClient = 'Client' in els
-    const [m, u, a, g, cards, lp, lines, t, r, v, now] = await Promise.all([
+    const [m, u, a, g, cards, lp, lines, t, r, v, now, mu] = await Promise.all([
       getMain($),
       getUsage($),
       getArchitect($),
@@ -533,6 +544,7 @@ export const register: Register = (on, options) => {
       read($, receipt),
       getView($),
       $.clock.now(),
+      getModelUsage($),
     ])
     const W = Math.max(40, e.props.bodyColumns)
     const layout = v.layout ?? cfg.layout
@@ -545,8 +557,10 @@ export const register: Register = (on, options) => {
     const showArchitect = a.consults.length > 0 || a.ids.length > 0
     const motion = cfg.motion && hasClient
     // A panel with nothing to show yet takes no room: most sessions never spawn an agent.
+    const usageRows = modelUsageRows(mu)
     const isEmpty: Record<Panel, boolean> = {
       main: false,
+      models: usageRows.length === 0,
       architect: !showArchitect,
       gate: g.recent.length === 0 && gateSummary(g).total === 0,
       agents: cards.length === 0,
@@ -627,6 +641,23 @@ export const register: Register = (on, options) => {
             })}
           </Text>
         ) : null}
+      </Box>
+    )
+
+    // ---- models: token and cost tally, one row per model used this session
+    const modelsPanel = (w: number) => (
+      <Box flexDirection="column" borderStyle="round" borderColor={C.main} paddingX={1} width={w}>
+        <Text bold>Model usage</Text>
+        {usageRows.length === 0 ? <Text color={C.faint}>no model turns yet</Text> : null}
+        {usageRows.map(row => (
+          <Text wrap="truncate">
+            <Text color={C.main} bold>
+              {row.name}
+            </Text>
+            <Text dimColor>{` | in: ${kTokens(row.input)} | out: ${kTokens(row.output)}`}</Text>
+            <Text>{row.cost !== null ? ` | ${fmtUsd(row.cost)}` : ' | —'}</Text>
+          </Text>
+        ))}
       </Box>
     )
 
@@ -903,7 +934,17 @@ export const register: Register = (on, options) => {
     }
 
     // ---- log: whatever rows the other panels leave, 4 to 8
-    const used = 2 + 5 + (showArchitect ? 6 : 0) + 6 + (v.gateOpen ? 5 : 0) + (cards.length > cfg.maxCards ? 3 + Math.min(6, cards.length) : 8) + (expandedCard ? 8 : 0) + (lp.length ? 1 : 0) + 3
+    const used =
+      2 +
+      5 +
+      (usageRows.length > 0 ? 2 + usageRows.length : 0) +
+      (showArchitect ? 6 : 0) +
+      6 +
+      (v.gateOpen ? 5 : 0) +
+      (cards.length > cfg.maxCards ? 3 + Math.min(6, cards.length) : 8) +
+      (expandedCard ? 8 : 0) +
+      (lp.length ? 1 : 0) +
+      3
     const bodyRows = e.props.scroll?.bodyRows ?? e.viewport?.rows ?? 40
     const nLog = logRows(bodyRows, used)
     const shownLines = (viewed ? lines.filter(l => l.agentId === viewed) : lines).slice(-nLog)
@@ -934,17 +975,19 @@ export const register: Register = (on, options) => {
     const draw = (p: Panel, w: number) =>
       p === 'main'
         ? mainPanel(w)
-        : p === 'architect'
-          ? architectPanel(w)
-          : p === 'gate'
-            ? gatePanel(w)
-            : p === 'agents'
-              ? agentsPanel(w)
-              : p === 'loops'
-                ? loopsPanel(w)
-                : p === 'receipt'
-                  ? receiptPanel(w)
-                  : logPanel(w)
+        : p === 'models'
+          ? modelsPanel(w)
+          : p === 'architect'
+            ? architectPanel(w)
+            : p === 'gate'
+              ? gatePanel(w)
+              : p === 'agents'
+                ? agentsPanel(w)
+                : p === 'loops'
+                  ? loopsPanel(w)
+                  : p === 'receipt'
+                    ? receiptPanel(w)
+                    : logPanel(w)
 
     // Panels with the flow between them; the agents panel draws its own rails.
     const column = (ps: Panel[], w: number) => (
@@ -952,7 +995,14 @@ export const register: Register = (on, options) => {
         {ps.map((p, i) => {
           const prev = ps[i - 1]
           const link =
-            i === 0 || p === 'agents' || prev === 'agents' || p === 'log' || p === 'loops' || prev === 'loops'
+            i === 0 ||
+            p === 'agents' ||
+            prev === 'agents' ||
+            p === 'log' ||
+            p === 'loops' ||
+            prev === 'loops' ||
+            p === 'models' ||
+            prev === 'models'
               ? null
               : rail(`link-${p}`, p === 'architect' ? advising : m.isRunning, p === 'architect' ? C.arch : C.main, w)
           return (
@@ -1069,7 +1119,7 @@ export const register: Register = (on, options) => {
       <Box flexDirection="column">
         <Box columnGap={2}>
           {column(panels.filter(p => p === 'main' || p === 'architect' || p === 'gate'), colW)}
-          {column(panels.filter(p => p === 'agents' || p === 'loops' || p === 'receipt'), colW)}
+          {column(panels.filter(p => p === 'models' || p === 'agents' || p === 'loops' || p === 'receipt'), colW)}
         </Box>
         {panels.includes('log') ? logPanel(W) : null}
       </Box>
