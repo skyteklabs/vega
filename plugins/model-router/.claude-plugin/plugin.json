@@ -69,19 +69,19 @@
     "fastModel": {
       "type": "string",
       "title": "Fast tier",
-      "description": "Model alias or id for mechanical, local tasks",
+      "description": "Model alias (haiku, sonnet, opus, fable) or any full Claude model id for mechanical, local tasks",
       "default": "haiku"
     },
     "balancedModel": {
       "type": "string",
       "title": "Balanced tier",
-      "description": "Model alias or id for ordinary engineering work",
+      "description": "Model alias (haiku, sonnet, opus, fable) or any full Claude model id for ordinary engineering work",
       "default": "sonnet"
     },
     "deepModel": {
       "type": "string",
       "title": "Deep tier",
-      "description": "Model alias or id for hard or high-stakes work",
+      "description": "Model alias (haiku, sonnet, opus, fable) or any full Claude model id for hard or high-stakes work",
       "default": "opus"
     },
     "minUpgradeConfidence": {

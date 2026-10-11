@@ -31,6 +31,9 @@ import {
   settleCheck,
   trimRecent,
   startConsult,
+  tallyModel,
+  modelUsageRows,
+  estimateCost,
 } from '../hooks/core'
 import type { Check } from '../types'
 
@@ -132,7 +135,7 @@ test('consults open, close by id, and draw on a shared timeline', () => {
 
 test('config is read leniently: bad values fall back to defaults', () => {
   const d = parseConfig({})
-  expect([d.maxCards, d.layout, d.motion, d.moments, d.panels.length]).toEqual([3, 'auto', true, true, 7])
+  expect([d.maxCards, d.layout, d.motion, d.moments, d.panels.length]).toEqual([3, 'auto', true, true, 8])
   expect(d.architect.test('fable-advisor:fable-advisor')).toBe(true)
   const c = parseConfig({ architectPattern: '([', maxCards: 99, layout: 'diagonal', panels: 'log, gate ,nope,gate', motion: 'off' })
   expect(c.architect.test('advisor')).toBe(true) // invalid regex → default
@@ -180,6 +183,27 @@ test('layout math: lanes share one axis, the log gets 4-8 rows, the legend never
   expect(titleLines('Write tinyqueue test suite', 13, 16)).toEqual(['Write', 'tinyqueue test…'])
   expect(titleLines('Short', 13, 16)).toEqual(['Short', ''])
   expect(receiptOf({ ...DEFAULT_TURN, costAtStart: 1, edits: 2 }, { durationMs: 1000, agentsSince: 3, costNow: 1.5, reason: 'answer' }).costDelta).toBe(0.5)
+})
+
+test('model usage tallies cache reads and writes as input, across main and subagent steps alike', () => {
+  const usage = { input_tokens: 100, cache_read_input_tokens: 50, cache_creation_input_tokens: 10, output_tokens: 20 }
+  let mu = tallyModel({}, 'claude-opus-5-5', usage)
+  mu = tallyModel(mu, 'claude-opus-5-5', usage)
+  mu = tallyModel(mu, 'claude-fable-5-1', { output_tokens: 5 })
+  mu = tallyModel(mu, '', usage) // no model id: not tallied
+  expect(mu['claude-opus-5-5']).toEqual({ input: 320, output: 40, turns: 2 })
+  expect(mu['claude-fable-5-1']).toEqual({ input: 0, output: 5, turns: 1 })
+  expect(Object.keys(mu)).toEqual(['claude-opus-5-5', 'claude-fable-5-1'])
+})
+
+test('model usage rows are named, priced, and sorted busiest (by output) first', () => {
+  const rows = modelUsageRows({
+    'claude-sonnet-5-5': { input: 1000, output: 100, turns: 1 },
+    'claude-opus-5-5': { input: 2000, output: 400, turns: 2 },
+  })
+  expect(rows.map(r => r.name)).toEqual(['Opus 5.5', 'Sonnet 5.5'])
+  expect(Math.abs((rows[0]?.cost ?? NaN) - ((2000 / 1e6) * 4 + (400 / 1e6) * 20)) < 1e-9).toBe(true)
+  expect(estimateCost('some-other-vendor-model', { input: 1000, output: 1000, turns: 1 })).toBeNull()
 })
 
 // ---------------------------------------------------------------- drawing
@@ -300,6 +324,39 @@ test('subagents become cards, then swimlanes past the card limit; a card expands
     expect(await lanesUi.find({ text: /━/ })).toBeDefined()
     await lanesUi.unmount()
   }
+})
+
+test('the model usage card tallies main-loop steps, named and priced, hidden until one lands', async ($, on) => {
+  engine(on)
+  on('turn.step', async function* (_$, e) {
+    return {
+      turnId: e.turnId,
+      index: e.index,
+      model: e.model,
+      usage: { input_tokens: 1_000_000, output_tokens: 1_000_000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+      stopReason: null,
+      answer: '',
+      toolUses: [],
+    } as never
+  })
+
+  const before = await $.ui.mount({ ...pane(64), surface: 'terminal' })
+  expect(await before.find({ text: /Model usage/ })).toBeUndefined()
+  await before.unmount()
+
+  await $.turn.start({ text: 'go', turnId: 'MU1' })
+  const stream = $.turn.step({ turnId: 'MU1', index: 0, model: 'claude-opus-5-5', effort: 'medium', messageCount: 1 })
+  for await (const _chunk of stream) {
+    // drained only so the result settles
+  }
+  await stream.result
+
+  const after = await $.ui.mount({ ...pane(64), surface: 'terminal' })
+  expect(await after.find({ text: /Model usage/ })).toBeDefined()
+  expect(await after.find({ text: /Opus 5\.5/ })).toBeDefined()
+  expect(await after.find({ text: /in: 1\.0M/ })).toBeDefined()
+  expect(await after.find({ text: /\$24\.00/ })).toBeDefined()
+  await after.unmount()
 })
 
 test('the server-side advisor is read from assistant rows: consulting, then on call', async ($, on) => {

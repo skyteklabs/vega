@@ -282,6 +282,10 @@ export function rankOf(model: string, tiers: Tiers): number | null {
   if (lowered.includes('haiku')) return 0
   if (lowered.includes('sonnet')) return 1
   if (lowered.includes('opus')) return 2
+  // Fable has no rung of its own on a three-tier ladder; it is Anthropic's
+  // most capable model, pricier than Opus, so the top rung this ladder has
+  // is the closer fit than an unrecognised id's gentle default.
+  if (lowered.includes('fable')) return 2
   return null
 }
 
@@ -298,6 +302,7 @@ const ALIAS_IDS: Record<string, string> = {
   haiku: 'claude-haiku-4-5-20251001',
   sonnet: 'claude-sonnet-5',
   opus: 'claude-opus-5',
+  fable: 'claude-fable-5-1',
 }
 
 /**

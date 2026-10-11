@@ -381,6 +381,16 @@ test('a family alias resolves to a full id for the main loop', () => {
   expect(requestModelId('haiku')).toBe('claude-haiku-4-5-20251001')
   expect(requestModelId('Sonnet')).toBe('claude-sonnet-5')
   expect(requestModelId('opus')).toBe('claude-opus-5')
+  expect(requestModelId('fable')).toBe('claude-fable-5-1')
+})
+
+// Tiers are not limited to the three built-in family names: any alias the
+// Agent tool itself takes, or any full model id, works as a tier's value.
+test('fable resolves and ranks like the other family aliases', () => {
+  expect(requestModelId('Fable')).toBe('claude-fable-5-1')
+  expect(rankOf('claude-fable-5-1', config.tiers)).toBe(2)
+  const decision = readDecision(gatewayAnswer('fast', { fast: 0.95, balanced: 0.04, deep: 0.01 }))
+  expect(route(decision, on('claude-fable-5-1'), config).model).toBe('haiku')
 })
 
 test('a full id or an unknown name is passed through unchanged', () => {

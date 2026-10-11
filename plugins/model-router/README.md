@@ -141,13 +141,16 @@ With a key set, the prompt text leaves the machine and goes to whichever backend
   logDecisions:           boolean log each decision (default true)
 ```
 
-The three tiers take an alias (`haiku`, `sonnet`, `opus`) or a full model id.
-A subagent is spawned with the name as given, the way the Agent tool takes it;
-the main loop's request needs an id, so there an alias is resolved to the
-family's current id (`haiku` → `claude-haiku-4-5-20251001`, `sonnet` →
-`claude-sonnet-5`, `opus` → `claude-opus-5`). Set a full id to pin a
-specific version. A decision for the tier the session already runs is not a
-change, so a session on `claude-opus-5[1m]` keeps its 1M-context id.
+The three tiers take an alias (`haiku`, `sonnet`, `opus`, `fable`) or a full
+model id — any Claude model, not only the three family names. A subagent is
+spawned with the name as given, the way the Agent tool takes it; the main
+loop's request needs an id, so there an alias is resolved to the family's
+current id (`haiku` → `claude-haiku-4-5-20251001`, `sonnet` →
+`claude-sonnet-5`, `opus` → `claude-opus-5`, `fable` → `claude-fable-5-1`).
+Set a full id (e.g. `claude-opus-5-5` or `claude-sonnet-4-6`) to pin a
+specific version or generation. A decision for the tier the session already
+runs is not a change, so a session on `claude-opus-5[1m]` keeps its 1M-context
+id.
 
 Declared in `.claude-plugin/plugin.json` (`userConfig`). Set them in `/config`, in user settings (`~/.claude/settings.json`, not project settings), with `--settings <file>` or in managed settings:
 

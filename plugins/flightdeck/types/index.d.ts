@@ -90,6 +90,9 @@ export type View = { expanded: string | null; gateOpen: Bucket | null; layout: L
 
 export type Roster = { architectTypes: string[] }
 
+/** One model's running tally for the session: tokens moved and how many requests it answered. */
+export type ModelTally = { input: number; output: number; turns: number }
+
 declare module 'claude-code' {
   interface PluginState {
     'flightdeck': {
@@ -105,6 +108,7 @@ declare module 'claude-code' {
       receipt: Receipt | null
       view: View
       roster: Roster
+      modelUsage: Record<string, ModelTally>
     }
   }
 }

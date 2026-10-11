@@ -18,6 +18,7 @@ The pane opens when a session starts, and resets on `/clear`.
 | Panel | What it shows |
 | --- | --- |
 | `main` | Model, effort, permission mode and step count; context and cost gauges, rate limits, compactions |
+| `models` | Every model used this session, busiest first: tokens in/out and an estimated list-price cost per model. Hidden until a model has answered a step |
 | `architect` | Consults of the on-call architect on a timeline, the moment of each, and the last advice |
 | `gate` | Every permission check, bucketed into file, shell and other, counted as rule, ask, cleared or deny |
 | `agents` | A card per subagent: model, steps, context, output tokens, its last three tools and a running clock. More than `maxCards` agents switch to swimlanes |
@@ -57,7 +58,7 @@ State lives in plugin atoms. The reducers, formatting and layout math are pure f
 
 | Option | Default | What it does |
 | --- | --- | --- |
-| `panels` | `main,architect,gate,agents,loops,receipt,log` | Panels in display order; leave one out to hide it |
+| `panels` | `main,models,architect,gate,agents,loops,receipt,log` | Panels in display order; leave one out to hide it |
 | `layout` | `auto` | `auto`: a summary of at most 8 rows inline above the prompt, two columns from 110 columns when docked, one otherwise. Or `compact`, `wide`, `mini` |
 | `palette` | `theme` | `theme` follows your Claude Code theme; `pastel` is fixed colours for dark terminals |
 | `motion` | `while-active` | Animate the connectors while work flows, or `off` |

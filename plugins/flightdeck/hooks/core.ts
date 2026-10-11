@@ -11,6 +11,7 @@ import type {
   LogLine,
   Loop,
   Main,
+  ModelTally,
   Moment,
   Receipt,
   Roster,
@@ -41,6 +42,7 @@ export const DEFAULT_GATE: Gate = { recent: [], totals: { file: ZERO, shell: ZER
 export const DEFAULT_TURN: Turn = { edits: 0, errorStreak: 0, errors: 0, isReviewing: false, startedAt: 0, costAtStart: null }
 export const DEFAULT_VIEW: View = { expanded: null, gateOpen: null, layout: null }
 export const DEFAULT_ROSTER: Roster = { architectTypes: [] }
+export const DEFAULT_MODEL_USAGE: Record<string, ModelTally> = {}
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 
@@ -91,8 +93,8 @@ export const normalizeLog = (stored: unknown): LogLine[] =>
 
 // ---------------------------------------------------------------- config
 
-export type Panel = 'main' | 'architect' | 'gate' | 'agents' | 'loops' | 'receipt' | 'log'
-const PANELS: readonly Panel[] = ['main', 'architect', 'gate', 'agents', 'loops', 'receipt', 'log']
+export type Panel = 'main' | 'models' | 'architect' | 'gate' | 'agents' | 'loops' | 'receipt' | 'log'
+const PANELS: readonly Panel[] = ['main', 'models', 'architect', 'gate', 'agents', 'loops', 'receipt', 'log']
 
 export type Config = {
   architect: RegExp
@@ -402,6 +404,46 @@ export const applyStep = (c: AgentCard, s: { model: string; usage: StepUsage; st
 }
 
 export const noteTool = (c: AgentCard, n: ToolNote): AgentCard => ({ ...c, tools: [...c.tools, n].slice(-3) })
+
+// ---------------------------------------------------------------- model usage
+
+/** Adds one model request's usage to its running tally: cache read and write count as input, as the session cost total does. */
+export const tallyModel = (usage: Readonly<Record<string, ModelTally>>, model: string, u: StepUsage): Record<string, ModelTally> => {
+  if (!model) return usage
+  const was = usage[model] ?? { input: 0, output: 0, turns: 0 }
+  const input = (u?.input_tokens ?? 0) + (u?.cache_read_input_tokens ?? 0) + (u?.cache_creation_input_tokens ?? 0)
+  return { ...usage, [model]: { input: was.input + input, output: was.output + (u?.output_tokens ?? 0), turns: was.turns + 1 } }
+}
+
+/** List price per 1M tokens, keyed by the name `prettyModel` shows (cached 2026-10). An estimate
+ * only: cache reads and writes are charged at the ordinary input rate here, and a name this table
+ * does not carry shows no dollar figure rather than a guessed one. */
+const PRICES: Record<string, { in: number; out: number }> = {
+  'Fable 5.1': { in: 10, out: 50 },
+  'Fable 5': { in: 10, out: 50 },
+  'Opus 5.5': { in: 4, out: 20 },
+  'Opus 5': { in: 5, out: 25 },
+  'Opus 4.8': { in: 5, out: 25 },
+  'Opus 4.7': { in: 5, out: 25 },
+  'Opus 4.6': { in: 5, out: 25 },
+  'Sonnet 5.5': { in: 2, out: 10 },
+  'Sonnet 5': { in: 2, out: 10 },
+  'Sonnet 4.6': { in: 3, out: 15 },
+  'Haiku 5.5': { in: 0.1, out: 0.5 },
+  'Haiku 4.5': { in: 1, out: 5 },
+}
+
+/** `t`'s estimated dollar cost at `name`'s list price, or null when the name carries no price. */
+export const estimateCost = (name: string, t: ModelTally): number | null => {
+  const p = PRICES[name]
+  return p ? (t.input / 1_000_000) * p.in + (t.output / 1_000_000) * p.out : null
+}
+
+/** Every model used this session, busiest (by output) first, named and priced for the card. */
+export const modelUsageRows = (usage: Readonly<Record<string, ModelTally>>) =>
+  Object.entries(usage)
+    .sort((a, b) => b[1].output - a[1].output)
+    .map(([id, t]) => ({ name: prettyModel(id), input: t.input, output: t.output, cost: estimateCost(prettyModel(id), t) }))
 
 export const stepLoop = (loops: Loop[], id: string, at: number): Loop[] => {
   const found = loops.find(l => l.id === id)
