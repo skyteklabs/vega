@@ -23,6 +23,7 @@ import {
   parseConfig,
   prettyModel,
   promptLine,
+  ranOnModel,
   handbackOf,
   adviceLine,
   receiptOf,
@@ -183,6 +184,14 @@ test('layout math: lanes share one axis, the log gets 4-8 rows, the legend never
   expect(titleLines('Write tinyqueue test suite', 13, 16)).toEqual(['Write', 'tinyqueue test…'])
   expect(titleLines('Short', 13, 16)).toEqual(['Short', ''])
   expect(receiptOf({ ...DEFAULT_TURN, costAtStart: 1, edits: 2 }, { durationMs: 1000, agentsSince: 3, costNow: 1.5, reason: 'answer' }).costDelta).toBe(0.5)
+})
+
+// The API answers `claude-opus-5-5` for a `claude-opus-5-5[1m]` request: same model, keep the badge.
+test('a step ran on the routed model, but a bare context label is not a reroute', () => {
+  expect(ranOnModel('claude-opus-5-5[1m]', 'claude-opus-5-5')).toBe('claude-opus-5-5[1m]')
+  expect(ranOnModel('claude-opus-5-5', 'claude-opus-5-5')).toBe('claude-opus-5-5')
+  expect(ranOnModel('claude-opus-5-5[1m]', 'claude-sonnet-5-5')).toBe('claude-sonnet-5-5')
+  expect(ranOnModel('claude-opus-5-5[1m]', undefined)).toBe('claude-opus-5-5[1m]')
 })
 
 test('model usage tallies cache reads and writes as input, across main and subagent steps alike', () => {

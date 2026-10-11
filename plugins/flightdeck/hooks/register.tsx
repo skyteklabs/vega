@@ -48,6 +48,7 @@ import {
   parseConfig,
   prettyModel,
   promptLine,
+  ranOnModel,
   handbackOf,
   adviceLine,
   receiptOf,
@@ -323,14 +324,14 @@ export const register: Register = (on, options) => {
       const result = yield* next(e)
       // `e.model` is what the engine resolved before any later hook (e.g. model-router)
       // rewrote it going down; `result.usage.model` is the id the API actually answered
-      // with, so it is the source of truth once the response is back.
-      const ranOn = result.usage?.model ?? e.model
+      // with, so it is the source of truth once the response is back (see `ranOnModel`).
+      const ranOn = ranOnModel(e.model, result.usage?.model)
       if (ranOn !== e.model) await update($, main, m => ({ ...normalize(DEFAULT_MAIN, m), model: ranOn }))
       await update($, modelUsage, mu => tallyModel(mu, ranOn, result.usage))
       return result
     }
     const result = yield* next(e)
-    const ranOn = result.usage?.model ?? e.model
+    const ranOn = ranOnModel(e.model, result.usage?.model)
     const id = e.agentId
     const [cards, a] = await Promise.all([getCards($), getArchitect($)])
     if (cards.some(c => c.id === id)) {
