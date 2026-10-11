@@ -34,11 +34,11 @@ claude --plugin-dir ./plugins/model-router
 
 | Plugin | Version | Description |
 |---|---|---|
-| [`model-router`](plugins/model-router) | 0.1.0 | Picks the model and reasoning effort per task using Jev, TypeSafe's System One decision model |
-| [`flightdeck`](plugins/flightdeck) | 0.1.0 | Live agent dashboard: main-model vitals, on-call architect, permission checks, subagent cards and swimlanes, turn receipt, session log |
-| [`next-steps`](plugins/next-steps) | 1.0.0 | Suggests up to three next prompts above the input after each turn; press `1`–`3` to draft one |
-| [`burner`](plugins/burner) | 0.3.0 | Live session cost odometer above the prompt: a burning fuse, real-world comparisons, threshold alerts |
-| [`skytek`](plugins/skytek) | 0.5.0 | Writes a Scope of Work from an RFP or an interview, as `.docx` and `.pdf` from one Word template |
+| [`model-router`](plugins/model-router) | 0.2.0 | Picks the model and reasoning effort per task using Jev, TypeSafe's System One decision model |
+| [`flightdeck`](plugins/flightdeck) | 0.2.0 | Live agent dashboard: main-model vitals, on-call architect, permission checks, subagent cards and swimlanes, turn receipt, session log |
+| [`next-steps`](plugins/next-steps) | 1.0.1 | Suggests up to three next prompts above the input after each turn; press `1`–`3` to draft one |
+| [`burner`](plugins/burner) | 0.3.1 | Live session cost odometer above the prompt: a burning fuse, real-world comparisons, threshold alerts |
+| [`skytek`](plugins/skytek) | 0.6.0 | Writes a Scope of Work from an RFP or an interview, as `.docx` and `.pdf` from one Word template |
 
 The first four are function-hooks plugins (mods): a `hooks/hooks.json` points at a TypeScript module that Claude Code loads directly, with no build step and no `node_modules`. `skytek` is a skill plugin: a `SKILL.md` plus Python scripts run with `uv`.
 
