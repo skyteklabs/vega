@@ -203,6 +203,17 @@ export const prettyModel = (id: string) => {
   return shorten(id, 22)
 }
 
+/**
+ * The model a step ran on: `reported` (the id the API answered with) when a hook rewrote the
+ * request to another model, else `requested`. The API never echoes the client-side context label,
+ * so `claude-opus-5-5[1m]` comes back as `claude-opus-5-5`; that is the same model, and the
+ * requested id keeps its 1M badge.
+ */
+export const ranOnModel = (requested: string, reported: string | undefined) => {
+  const base = (id: string) => id.replace(/\[1m\]$|-1m$/i, '')
+  return !reported || base(reported) === base(requested) ? requested : reported
+}
+
 export const shorten = (s: string, n: number) => {
   const one = s.replace(/\s+/g, ' ').trim()
   return n <= 0 ? '' : one.length > n ? `${one.slice(0, Math.max(0, n - 1)).trimEnd()}…` : one
