@@ -71,8 +71,9 @@ import type { Decision, Effort, PolicyConfig, Provider, Tier } from './policy.ts
 const TIMED_OUT = Symbol('timed out')
 
 /** `work`, or TIMED_OUT if `deadline` comes first. */
-function within<T>(work: Promise<T>, deadline: Promise<void>): Promise<T | typeof TIMED_OUT> {
-  return Promise.race([work, deadline.then(() => TIMED_OUT)])
+function within<T>(work: Promise<T>, deadline: Promise<void>): Promise<Awaited<T> | typeof TIMED_OUT> {
+  // Annotated, or the callback's return widens the unique symbol to `symbol`.
+  return Promise.race([work, deadline.then((): typeof TIMED_OUT => TIMED_OUT)])
 }
 
 export const register: Register = (on, options) => {
