@@ -937,7 +937,7 @@ export const register: Register = (on, options) => {
     const used =
       2 +
       5 +
-      (usageRows.length > 0 ? 2 + usageRows.length : 0) +
+      (usageRows.length > 0 ? 3 + usageRows.length : 0) +
       (showArchitect ? 6 : 0) +
       6 +
       (v.gateOpen ? 5 : 0) +
