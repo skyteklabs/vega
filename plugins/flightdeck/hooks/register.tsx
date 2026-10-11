@@ -321,21 +321,27 @@ export const register: Register = (on, options) => {
         return { ...x, model: e.model, effort: String(e.effort ?? x.effort), steps: x.steps + 1 }
       })
       const result = yield* next(e)
-      await update($, modelUsage, mu => tallyModel(mu, e.model, result.usage))
+      // `e.model` is what the engine resolved before any later hook (e.g. model-router)
+      // rewrote it going down; `result.usage.model` is the id the API actually answered
+      // with, so it is the source of truth once the response is back.
+      const ranOn = result.usage?.model ?? e.model
+      if (ranOn !== e.model) await update($, main, m => ({ ...normalize(DEFAULT_MAIN, m), model: ranOn }))
+      await update($, modelUsage, mu => tallyModel(mu, ranOn, result.usage))
       return result
     }
     const result = yield* next(e)
+    const ranOn = result.usage?.model ?? e.model
     const id = e.agentId
     const [cards, a] = await Promise.all([getCards($), getArchitect($)])
     if (cards.some(c => c.id === id)) {
-      const step = { model: e.model, usage: result.usage, stopReason: result.stopReason }
+      const step = { model: ranOn, usage: result.usage, stopReason: result.stopReason }
       await update($, agents, list => listOf<unknown>(list).map(normalizeCard).map(c => (c.id === id ? applyStep(c, step) : c)))
       if (result.stopReason === 'max_tokens') await say($, await whoIs($, id), 'hit max_tokens', 'error', id)
     } else if (!a.ids.includes(id)) {
       const now = await $.clock.now()
       await update($, loops, l => stepLoop(listOf<Loop>(l), id, now))
     }
-    await update($, modelUsage, mu => tallyModel(mu, e.model, result.usage))
+    await update($, modelUsage, mu => tallyModel(mu, ranOn, result.usage))
     return result
   })
 
