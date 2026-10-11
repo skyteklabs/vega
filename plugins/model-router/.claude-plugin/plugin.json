@@ -1,6 +1,6 @@
 {
   "name": "model-router",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Jev (TypeSafe) picks the model and effort per task type; ported from jev-model-router with main-loop model switching on",
   "author": {
     "name": "SkyTek Labs"
