@@ -37,8 +37,8 @@ claude --plugin-dir ./plugins/model-router
 | [`model-router`](plugins/model-router) | 0.1.0 | Picks the model and reasoning effort per task using Jev, TypeSafe's System One decision model |
 | [`flightdeck`](plugins/flightdeck) | 0.1.0 | Live agent dashboard: main-model vitals, on-call architect, permission checks, subagent cards and swimlanes, turn receipt, session log |
 | [`next-steps`](plugins/next-steps) | 1.0.0 | Suggests up to three next prompts above the input after each turn; press `1`–`3` to draft one |
-| [`burner`](plugins/burner) | 0.2.0 | Live session cost odometer above the prompt: a burning fuse, real-world comparisons, threshold alerts |
-| [`skytek`](plugins/skytek) | 0.1.0 | Writes a Scope of Work from an RFP or an interview, as `.docx` and `.pdf` from one Word template |
+| [`burner`](plugins/burner) | 0.3.0 | Live session cost odometer above the prompt: a burning fuse, real-world comparisons, threshold alerts |
+| [`skytek`](plugins/skytek) | 0.5.0 | Writes a Scope of Work from an RFP or an interview, as `.docx` and `.pdf` from one Word template |
 
 The first four are function-hooks plugins (mods): a `hooks/hooks.json` points at a TypeScript module that Claude Code loads directly, with no build step and no `node_modules`. `skytek` is a skill plugin: a `SKILL.md` plus Python scripts run with `uv`.
 
@@ -46,7 +46,7 @@ The first four are function-hooks plugins (mods): a `hooks/hooks.json` points at
 
 Classifies each prompt with [Jev](https://typesafe.ai) and routes it to a model tier and reasoning effort:
 
-- **Tiers** — `fast` / `balanced` / `deep`, defaulting to `haiku` / `sonnet` / `opus`. Each accepts an alias or a full model id.
+- **Tiers** — `fast` / `balanced` / `deep`, defaulting to `haiku` / `sonnet` / `opus`. Each accepts an alias (`haiku`, `sonnet`, `opus`, `fable`) or any full Claude model id.
 - **Effort** — `low` / `medium` / `high` / `xhigh`, from how much step-by-step reasoning the task needs.
 - **Risk** — a task touching production, money, credentials, or irreversible state (`risky` > 0.7) goes to the deep tier with real reasoning.
 
@@ -81,6 +81,7 @@ A live dashboard pane fed only by real session events (`turn.step`, `tool.check`
 | Panel | Shows |
 |---|---|
 | `main` | model, effort, permission mode, steps, context and cost gauges, rate limits |
+| `models` | every model used this session, busiest first: tokens in/out and estimated list-price cost; hidden until a model answers |
 | `architect` | consults of the on-call architect (agent types or server tools matching `architectPattern`), with the inferred moment of each |
 | `gate` | every permission check, bucketed into file / shell / other, by rule, ask, cleared, deny |
 | `agents` | a card per subagent; more than `maxCards` switches to swimlanes |
@@ -130,7 +131,7 @@ The `create-sow` skill turns an RFP into a Scope of Work:
 
 The PDF comes from LibreOffice (headless) or Microsoft Word. With neither installed you get the `.docx` and an offer to install LibreOffice. Requires [`uv`](https://docs.astral.sh/uv/).
 
-Options: `outputDir` (default `./sow`), `templatePath` (your own template), and the vendor defaults `vendorName`, `vendorAddress`, `vendorSignatoryName` and `vendorSignatoryTitle`. See the [plugin README](plugins/skytek/README.md) for the template rules and the field list.
+Options: `outputDir` (default `./sow`), `templatePath` (your own template), and the vendor defaults `vendorName`, `vendorAddress`, `vendorSignatoryName`, `vendorSignatoryTitle` and `vendorOverview`. See the [plugin README](plugins/skytek/README.md) for the template rules and the field list.
 
 ## Repository layout
 
