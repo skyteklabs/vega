@@ -29,7 +29,8 @@
     "currency",
     "pricing_model",
     "payment_schedule",
-    "payment_terms"
+    "payment_terms",
+    "tax_treatment"
   ],
   "allOf": [
     {
@@ -128,16 +129,19 @@
     },
     "vendor_address": {
       "type": "string",
+      "minLength": 1,
       "description": "Vendor's address.",
       "x-question": "What is the vendor's address?"
     },
     "vendor_signatory_name": {
       "type": "string",
+      "minLength": 1,
       "description": "Who signs for the vendor.",
       "x-question": "Who signs for the vendor?"
     },
     "vendor_signatory_title": {
       "type": "string",
+      "minLength": 1,
       "description": "Job title of the vendor signatory.",
       "x-question": "What is the vendor signatory's title?"
     },
@@ -296,11 +300,13 @@
     },
     "start_date": {
       "type": "string",
+      "minLength": 1,
       "description": "Estimated start, YYYY-MM-DD or free text.",
       "x-question": "When does the work start?"
     },
     "end_date": {
       "type": "string",
+      "minLength": 1,
       "description": "Estimated end, YYYY-MM-DD or free text.",
       "x-question": "When does the work end?"
     },
@@ -432,7 +438,6 @@
     "tax_treatment": {
       "type": "string",
       "enum": ["exclusive", "inclusive"],
-      "default": "exclusive",
       "description": "Whether the fees include sales tax or VAT.",
       "x-question": "Are the fees exclusive or inclusive of sales tax / VAT?"
     },

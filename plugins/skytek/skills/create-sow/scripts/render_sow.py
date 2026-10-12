@@ -123,7 +123,10 @@ def check_template(template, schema):
 
 def fmt_date(value):
     if isinstance(value, str) and ISO_DATE.match(value):
-        d = dt.date.fromisoformat(value)
+        try:
+            d = dt.date.fromisoformat(value)
+        except ValueError as e:
+            raise SowError(f"invalid SOW data:\n  {value}: not a real calendar date") from e
         return f"{d.day} {d.strftime('%B %Y')}"
     return value
 
@@ -307,6 +310,9 @@ def main():
         result = render(args.data, args.template, args.out_dir, want_pdf=not args.no_pdf)
     except (SowError, json.JSONDecodeError, FileNotFoundError) as e:
         print(json.dumps({"error": str(e)}), file=sys.stderr)
+        return 2
+    except Exception as e:  # anything else is a bad data file or template, not a crash to hand the user
+        print(json.dumps({"error": f"{type(e).__name__}: {e}"}), file=sys.stderr)
         return 2
     print(json.dumps(result, indent=2))
     return 0 if result["pdf"] or args.no_pdf else 3
