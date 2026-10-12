@@ -118,7 +118,7 @@ def test_optional_fields_fall_back(tmp_path):
     for key in (
         "out_of_scope", "non_functional_requirements", "architecture_overview",
         "architecture_components", "integrations", "assumptions", "risks", "client_roles",
-        "msa_reference", "governing_law", "author", "tax_treatment",
+        "msa_reference", "governing_law", "author",
         "client_signatory_name", "version",
     ):
         data.pop(key)
@@ -134,7 +134,6 @@ def test_optional_fields_fall_back(tmp_path):
     assert "confirmed at kick-off" in xml
     assert "single point of contact" in xml  # standard assumptions
     assert "supersedes any other agreement" in xml  # no MSA
-    assert "exclusive of any applicable sales tax" in xml
     assert "governed by the laws" not in xml
     assert "Author" not in xml
 
@@ -283,6 +282,63 @@ def test_rejects_invalid_data(tmp_path):
     assert result.returncode == 2
     assert "client_name" in result.stderr and "bartering" in result.stderr
     assert not list(tmp_path.glob("*.docx"))
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["vendor_address", "vendor_signatory_name", "vendor_signatory_title", "start_date", "end_date"],
+)
+def test_rejects_empty_required_text(tmp_path, field):
+    data = json.loads(SAMPLE.read_text())
+    data[field] = ""
+    path = tmp_path / "empty_field.json"
+    path.write_text(json.dumps(data))
+    result = render(tmp_path, path, "--no-pdf")
+    assert result.returncode == 2
+    assert field in result.stderr
+    assert not list(tmp_path.glob("*.docx"))
+
+
+def test_tax_treatment_is_required(tmp_path):
+    """No schema default: an omitted tax treatment must be asked, not assumed exclusive."""
+    data = json.loads(SAMPLE.read_text())
+    del data["tax_treatment"]
+    path = tmp_path / "no_tax.json"
+    path.write_text(json.dumps(data))
+    result = render(tmp_path, path, "--no-pdf")
+    assert result.returncode == 2
+    assert "tax_treatment" in result.stderr
+    assert not list(tmp_path.glob("*.docx"))
+
+
+def test_tax_treatment_has_no_schema_default():
+    schema = json.loads((SKILL / "assets" / "sow.schema.json").read_text())
+    assert "default" not in schema["properties"]["tax_treatment"]
+
+
+@pytest.mark.parametrize("field", ["sow_date", "start_date"])
+def test_rejects_impossible_calendar_date(tmp_path, field):
+    """Matches YYYY-MM-DD but is not a date: exit 2, not a traceback."""
+    data = json.loads(SAMPLE.read_text())
+    data[field] = "2026-13-45"
+    path = tmp_path / "bad_date.json"
+    path.write_text(json.dumps(data))
+    result = render(tmp_path, path, "--no-pdf")
+    assert result.returncode == 2
+    assert "2026-13-45" in result.stderr and "Traceback" not in result.stderr
+    assert not list(tmp_path.glob("*.docx"))
+
+
+def test_unexpected_errors_exit_2(tmp_path):
+    """A template that is not a Word file used to escape as a traceback."""
+    bad_template = tmp_path / "not-a-template.docx"
+    bad_template.write_text("not a zip")
+    out = tmp_path / "out"
+    result = render(out, SAMPLE, "--no-pdf", "--template", bad_template)
+    assert result.returncode == 2
+    assert "Traceback" not in result.stderr
+    assert json.loads(result.stderr)["error"]
+    assert not list(out.glob("*.docx"))
 
 
 def test_extract_docx_reads_tables(tmp_path):
