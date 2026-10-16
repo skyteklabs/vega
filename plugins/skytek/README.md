@@ -17,10 +17,10 @@ It is a skill plugin (`skills/create-sow/SKILL.md`), with no hooks:
    - PDF, txt and md: read directly.
    - docx: `scripts/extract_docx.py`, which keeps table rows.
    - `.doc`, `.rtf` and `.odt`: `textutil` on macOS.
-   - A saved `.sow.json`: skips straight to rendering.
-2. **Map** the RFP onto the fields in `assets/sow.schema.json`, recording each field's source (`rfp`, `inferred`, `default`, `user`).
+   - A saved `.sow.json`: goes to the Review step, which confirms its pricing before rendering.
+2. **Map** the RFP onto the fields in `assets/sow.schema.json`, recording each field's source (`rfp`, `inferred`, `default`, `user`). Pricing fields must be `rfp` or `user`; `default` and `inferred` are rejected at render.
 3. **Interview** only for required fields the RFP left open. Pricing, payment and legal terms are never guessed.
-4. **Review**: you approve a table of every value before anything is written.
+4. **Review**: you approve a table of every value before anything is written. For a saved `.sow.json` you confirm only the pricing fields.
 5. **Render** with `scripts/render_sow.py`:
    - validates the JSON against the schema;
    - fills the template with [docxtpl](https://docxtpl.readthedocs.io);
@@ -98,10 +98,11 @@ uv run skills/create-sow/scripts/render_sow.py --check-template [--template path
 Older `.sow.json` files fail validation:
 - 0.1.0: `background`, `in_scope`, `milestones` and `roles` were replaced; move their values into the new fields.
 - 0.2.0: add `project_type`, and move the priced lines out of `fees` into `package_items` or `effort`.
+- 0.8.0: every pricing field needs `rfp` or `user` in `_sources`, or the render exits 2. The fields are `package_items` or `effort`, `currency`, `pricing_model`, `payment_schedule`, `payment_terms`, `tax_treatment`, and `fees` and `governing_law` when not empty. Files saved before 0.8.0 have none of these sources: re-render them through the skill, which asks you to confirm the pricing and records it as `user`, or add the `_sources` entries by hand.
 
 `project_type` picks the pricing table: `package` needs `package_items` and shows no mandays; `professional_services` needs `effort`. The schema rejects the wrong list for the type.
 
-`_sources` is kept in the `.sow.json` and never rendered.
+`_sources` is kept in the `.sow.json` and never rendered. It is checked for pricing fields only (see 0.8.0 above).
 
 ## Options
 
@@ -125,6 +126,7 @@ Fees, mandays and rates aside, `client_logo_path` is the one field worth asking 
 - the client-logo placeholder, embedding a given logo, and rejecting a missing or unreadable one;
 - package and effort pricing, and rejecting pricing that doesn't match `project_type`;
 - discount lines and rejecting a negative total;
+- rejecting pricing fields not sourced from `rfp` or `user`, and checking `fees` and `governing_law` only when they are set;
 - versioned file names;
 - rejecting invalid data;
 - reading docx tables back.
