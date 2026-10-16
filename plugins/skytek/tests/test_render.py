@@ -26,6 +26,11 @@ SCRIPTS = SKILL / "scripts"
 SAMPLE = SKILL / "assets" / "sample.json"
 TEMPLATE = SKILL / "assets" / "sow-template.docx"
 
+# What the sample sources from the RFP or the user: the fields render_sow.py checks for it.
+SAMPLE_PRICING_FIELDS = (
+    "effort", "currency", "pricing_model", "payment_schedule", "payment_terms", "tax_treatment", "governing_law",
+)
+
 
 def run(script, *args):
     return subprocess.run(
@@ -45,6 +50,35 @@ def docx_xml(path):
         return "".join(
             z.read(n).decode() for n in z.namelist() if n.startswith("word/") and n.endswith(".xml")
         )
+
+
+def sample_without_source(*fields):
+    """The sample with these `_sources` entries removed."""
+    data = json.loads(SAMPLE.read_text())
+    for field in fields:
+        del data["_sources"][field]
+    return data
+
+
+def package_sample(items=None, items_source="rfp"):
+    """The sample as a package project: `package_items` replace `effort`.
+
+    `effort` stays in `_sources`, as a stale entry. `items_source=None` leaves `package_items` unsourced.
+    """
+    data = json.loads(SAMPLE.read_text())
+    data["project_type"] = "package"
+    del data["effort"]
+    data["package_items"] = items or [{"item": "Setup", "quantity": 1, "unit_price": 66000}]
+    if items_source:
+        data["_sources"]["package_items"] = items_source
+    return data
+
+
+def render_json(tmp_path, data):
+    """Write `data` to a file in tmp_path and render it without the PDF."""
+    path = tmp_path / "data.json"
+    path.write_text(json.dumps(data))
+    return render(tmp_path, path, "--no-pdf")
 
 
 def _load_embed_fonts():
@@ -162,13 +196,12 @@ def test_effort_pricing(tmp_path):
 
 
 def test_package_pricing(tmp_path):
-    data = json.loads(SAMPLE.read_text())
-    data["project_type"] = "package"
-    del data["effort"]
-    data["package_items"] = [
-        {"item": "Platform licence", "description": "Annual, per vehicle", "quantity": 1200, "unit_price": 40},
-        {"item": "Setup", "quantity": 1, "unit_price": 18000},
-    ]
+    data = package_sample(
+        [
+            {"item": "Platform licence", "description": "Annual, per vehicle", "quantity": 1200, "unit_price": 40},
+            {"item": "Setup", "quantity": 1, "unit_price": 18000},
+        ]
+    )
     path = tmp_path / "package.json"
     path.write_text(json.dumps(data))
     result = render(tmp_path, path, "--no-pdf")
@@ -192,6 +225,7 @@ def test_pricing_must_match_project_type(tmp_path):
 def test_discount_lines(tmp_path):
     data = json.loads(SAMPLE.read_text())
     data["fees"] = [{"item": "Vendor investment", "amount": -6000}]
+    data["_sources"]["fees"] = "user"
     data["payment_schedule"][-1]["amount"] -= 6000
     path = tmp_path / "discount.json"
     path.write_text(json.dumps(data))
@@ -339,6 +373,73 @@ def test_unexpected_errors_exit_2(tmp_path):
     assert "Traceback" not in result.stderr
     assert json.loads(result.stderr)["error"]
     assert not list(out.glob("*.docx"))
+
+
+@pytest.mark.parametrize("field", SAMPLE_PRICING_FIELDS)
+def test_rejects_unsourced_pricing(tmp_path, field):
+    result = render_json(tmp_path, sample_without_source(field))
+    assert result.returncode == 2
+    assert f"_sources.{field}: pricing must come from the RFP or the user (got missing)" in result.stderr
+    assert not list(tmp_path.glob("*.docx"))
+
+
+@pytest.mark.parametrize("source", ["default", "inferred"])
+def test_rejects_default_and_inferred_pricing(tmp_path, source):
+    data = json.loads(SAMPLE.read_text())
+    data["_sources"]["effort"] = source
+    result = render_json(tmp_path, data)
+    assert result.returncode == 2
+    assert f"_sources.effort: pricing must come from the RFP or the user (got {source})" in result.stderr
+    assert not list(tmp_path.glob("*.docx"))
+
+
+def test_reports_every_unsourced_pricing_field(tmp_path):
+    data = json.loads(SAMPLE.read_text())
+    del data["_sources"]
+    result = render_json(tmp_path, data)
+    assert result.returncode == 2
+    for field in SAMPLE_PRICING_FIELDS:
+        assert f"_sources.{field}:" in result.stderr
+
+
+def test_package_checks_package_items_not_effort(tmp_path):
+    result = render_json(tmp_path, package_sample(items_source=None))  # effort stays sourced; package_items is not
+    assert result.returncode == 2
+    assert "_sources.package_items:" in result.stderr
+    assert "_sources.effort:" not in result.stderr
+
+
+def test_effort_not_checked_for_package(tmp_path):
+    data = package_sample()
+    del data["_sources"]["effort"]
+    result = render_json(tmp_path, data)
+    assert result.returncode == 0, result.stderr
+
+
+def test_fees_need_source_when_set(tmp_path):
+    data = json.loads(SAMPLE.read_text())
+    data["fees"] = [{"item": "Hosting", "amount": 500}]
+    data["payment_schedule"][-1]["amount"] += 500
+    result = render_json(tmp_path, data)
+    assert result.returncode == 2
+    assert "_sources.fees:" in result.stderr
+    data["_sources"]["fees"] = "user"
+    assert render_json(tmp_path, data).returncode == 0
+
+
+def test_empty_fees_need_no_source(tmp_path):
+    data = json.loads(SAMPLE.read_text())
+    data["fees"] = []
+    result = render_json(tmp_path, data)
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("value", ["", "   "])
+def test_empty_governing_law_needs_no_source(tmp_path, value):
+    data = sample_without_source("governing_law")
+    data["governing_law"] = value
+    result = render_json(tmp_path, data)
+    assert result.returncode == 0, result.stderr
 
 
 def test_extract_docx_reads_tables(tmp_path):
